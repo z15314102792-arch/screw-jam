@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v2.0</title>
+<title>螺丝消除 v2.1</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -105,7 +105,7 @@ class Audio {
         if (this.ctx.state === 'suspended') this.ctx.resume();
         this.master = this.ctx.createGain(); this.master.gain.value = 0.8;
         this.master.connect(this.ctx.destination);
-        this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0.5;
+        this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0.7;
         this.bgmGain.connect(this.master);
       } catch(e) { this.on = false; }
     };
@@ -171,8 +171,8 @@ class Audio {
       o.frequency.setValueAtTime(freq, start);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, start);
-      g.gain.linearRampToValueAtTime(0.05, start + 0.8);
-      g.gain.setValueAtTime(0.05, start + noteLen * 0.6);
+      g.gain.linearRampToValueAtTime(0.2, start + 0.8);
+      g.gain.setValueAtTime(0.2, start + noteLen * 0.6);
       g.gain.linearRampToValueAtTime(0, start + noteLen * 0.9);
       o.connect(g); g.connect(mg);
       o.start(start); o.stop(start + noteLen);
@@ -183,8 +183,8 @@ class Audio {
     bo.frequency.setValueAtTime(110, t);
     const bg = ctx.createGain();
     bg.gain.setValueAtTime(0, t);
-    bg.gain.linearRampToValueAtTime(0.04, t + 1.2);
-    bg.gain.setValueAtTime(0.04, t + seq.length * noteLen * 0.75);
+    bg.gain.linearRampToValueAtTime(0.15, t + 1.2);
+    bg.gain.setValueAtTime(0.15, t + seq.length * noteLen * 0.75);
     bg.gain.linearRampToValueAtTime(0, t + seq.length * noteLen * 0.93);
     bo.connect(bg); bg.connect(mg);
     bo.start(t); bo.stop(t + seq.length * noteLen);
@@ -260,24 +260,24 @@ const WOODS = [
 ];
 
 function genLevel(lv) {
-  // 大量面板 + 多样形状 + 中心聚集 → 高重叠高遮挡 → 需要策略
   let numCol, cap, numPanel, tempMax;
-  if (lv === 1)               { numCol=2; cap=3; numPanel=4; tempMax=6; }
-  else if (lv === 2)          { numCol=2; cap=4; numPanel=6; tempMax=5; }
-  else if (lv <= 3)           { numCol=3; cap=3; numPanel=7; tempMax=5; }
-  else if (lv <= 5)           { numCol=3; cap=3; numPanel=8; tempMax=5; }
-  else if (lv <= 7)           { numCol=4; cap=3; numPanel=9; tempMax=5; }
-  else if (lv <= 10)          { numCol=4; cap=3; numPanel=10; tempMax=5; }
-  else if (lv <= 13)          { numCol=5; cap=3; numPanel=10; tempMax=5; }
-  else if (lv <= 17)          { numCol=5; cap=3; numPanel=11; tempMax=6; }
-  else                        { numCol=6; cap=3; numPanel=12; tempMax=6; }
+  // 策略核心：少临时位+首盒颜色藏在底层=必须规划消除顺序
+  if (lv === 1)               { numCol=2; cap=3; numPanel=3; tempMax=5; }
+  else if (lv === 2)          { numCol=2; cap=3; numPanel=5; tempMax=4; }
+  else if (lv <= 3)           { numCol=3; cap=3; numPanel=6; tempMax=4; }
+  else if (lv <= 5)           { numCol=3; cap=3; numPanel=7; tempMax=4; }
+  else if (lv <= 7)           { numCol=4; cap=3; numPanel=8; tempMax=4; }
+  else if (lv <= 10)          { numCol=4; cap=3; numPanel=9; tempMax=4; }
+  else if (lv <= 13)          { numCol=5; cap=3; numPanel=9; tempMax=4; }
+  else if (lv <= 17)          { numCol=5; cap=3; numPanel=10; tempMax=5; }
+  else                        { numCol=6; cap=3; numPanel=10; tempMax=5; }
 
   const total = numCol * cap;
   const colors = COLS.slice(0, numCol);
   const GX=30, GY=130, GW=360, GH=340;
 
   let attempts = 0;
-  while (attempts < 100) {
+  while (attempts < 150) {
     attempts++;
     const result = _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
     if (result && _isSolvable(result)) return result;
@@ -286,20 +286,23 @@ function genLevel(lv) {
 }
 
 function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
+  // 1. 先确定盒子顺序 — 首盒颜色是关卡核心难点
+  const boxes = []; colors.forEach(c => boxes.push(c)); shuffle(boxes);
+  const firstBoxN = boxes[0].n;
+
+  // 2. 创建螺丝颜色池
   const screwCols = [];
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
-  // 创建面板：多种形状，大量面板，紧密排列
+  // 3. 创建面板
   const panels = [];
   for (let i = 0; i < numPanel; i++) {
     const pw = 70 + Math.random() * 80;
     const ph = 50 + Math.random() * 60;
-    // 强力中心聚集 — 确保大量重叠
-    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.52;
-    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.48;
+    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.5;
+    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.45;
     const wood = WOODS[i % WOODS.length];
-    // 第2关开始引入非矩形形状
     const shape = lv <= 1 ? SHAPE_RECT : ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)];
     panels.push({ id:i, cx, cy, w:pw, h:ph, shape, screws:[], dropped:false, wobble:false,
       wood, layer:i, _physAngle:0, _pivotX:null, _pivotY:null, _targetAngle:0
@@ -308,31 +311,39 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
-  // 分配螺丝 — 每板至少1颗，其余尽量均匀
+  // 4. 策略分配：每板先放一颗，首盒颜色避免放高层
   let si = 0;
   panels.forEach(p => {
-    p.screws.push({ id: si, color: screwCols[si], x: p.cx, y: p.cy, panelId: p.id, removed: false });
+    let col = screwCols[si];
+    if (p.layer >= numPanel * 0.35 && col.n === firstBoxN && si + 1 < total) {
+      for (let j = si + 1; j < Math.min(si + 8, total); j++) {
+        if (screwCols[j].n !== firstBoxN) { [screwCols[si], screwCols[j]] = [screwCols[j], screwCols[si]]; col = screwCols[si]; break; }
+      }
+    }
+    p.screws.push({ id: si, color: col, x: p.cx, y: p.cy, panelId: p.id, removed: false });
     si++;
   });
-  // 剩余螺丝分配到随机面板
-  const remaining = total - si;
-  for (let i = 0; i < remaining; i++) {
-    const p = panels[Math.floor(Math.random() * panels.length)];
-    const cnt = p.screws.length;
-    // 螺丝位置参考面板形状
+
+  // 5. 剩余螺丝：首盒颜色强制放底层，其他随机
+  for (let i = si; i < total; i++) {
+    const col = screwCols[i];
+    let candidates = [...panels];
+    if (col.n === firstBoxN) {
+      candidates.sort((a, b) => a.layer - b.layer); // 底层优先
+    } else {
+      shuffle(candidates);
+    }
+    const p = candidates.find(p => p.screws.length < 4) || panels[Math.floor(Math.random() * panels.length)];
     let sx, sy;
-    const maxTries = 20;
-    for (let t = 0; t < maxTries; t++) {
+    for (let t = 0; t < 20; t++) {
       sx = p.cx + (Math.random() - 0.5) * p.w * 0.7;
       sy = p.cy + (Math.random() - 0.5) * p.h * 0.7;
       if (shapeContains(p.cx, p.cy, p.w, p.h, p.shape, sx, sy)) break;
     }
-    p.screws.push({ id: si + i, color: screwCols[si + i], x: sx, y: sy, panelId: p.id, removed: false });
+    p.screws.push({ id: i, color: col, x: sx, y: sy, panelId: p.id, removed: false });
   }
 
   const allScrews = panels.flatMap(p => p.screws);
-  const boxes = []; colors.forEach(c => boxes.push(c)); shuffle(boxes);
-
   return {
     level: lv, colors, panels, screws: allScrews, boxes, cap, tempMax,
     activeBox: boxes.shift(), activeCount: 0, temp: [],
@@ -816,20 +827,22 @@ class Game {
       }
     }
 
-    // ★ 二轮：在所有面板上方画被遮螺丝的极淡色点（alpha 0.13，不遮木板）
+    // ★ 二轮：在所有面板上方画被遮螺丝（半透明完整螺丝，alpha 0.28）
     for(const p of sortedPanels){
       if(p.dropped||!p._blocked)continue;
       for(const s of p.screws){
         if(s.removed)continue;
         if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
-        ctx.globalAlpha = 0.13;
-        ctx.fillStyle = s.color.f;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill();
-        // 小锁
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = '#fff'; ctx.font = '7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // 保存并设置全局透明度
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        // 画完整螺丝（含六角形、渐变、十字槽）
+        this._drawScrewRaw(ctx, s.x, s.y, s.color);
+        // 🔒 标记
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('🔒', s.x, s.y);
-        ctx.globalAlpha = 1;
+        ctx.restore();
       }
     }
 
@@ -1008,6 +1021,30 @@ class Game {
     }
 
     ctx.restore();
+  }
+
+  // 纯螺丝绘制（无 save/restore/hint，供 ghost 层使用）
+  _drawScrewRaw(ctx, x, y, col) {
+    ctx.translate(x, y);
+    const r = 12;
+    ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
+    ctx.closePath();
+    const grad=ctx.createRadialGradient(-2,-2.5,r*0.05,1,1,r*1.2);
+    grad.addColorStop(0,lighten(col.f,55)); grad.addColorStop(0.2,lighten(col.f,25));
+    grad.addColorStop(0.5,col.f); grad.addColorStop(0.8,col.d); grad.addColorStop(1,'rgba(0,0,0,0.3)');
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.6; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5; ctx.stroke();
+    const slotW=1.2,slotL=r*0.5;
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(-slotW,-slotL,slotW*2,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,slotW*2);
+    ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
+    ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
+    ctx.translate(-x, -y);
   }
 
   _drawBoxes(ctx, st) {
