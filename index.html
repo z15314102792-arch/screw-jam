@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v1.9</title>
+<title>螺丝消除 v2.0</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -161,36 +161,31 @@ class Audio {
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
-    // 极简五声音阶氛围 — 零噪音，纯正弦长音
-    // Am 五声音阶: A C D E G (110 131 147 165 196 Hz 低八度)
-    const notes = [110, 130.8, 146.8, 164.8, 196, 220, 261.6, 293.7, 329.6, 392];
-    const noteLen = 3.5;
-    // 随机抽取 5 个音符构成柔和序列
-    const seq = [];
-    for (let i = 0; i < 5; i++) {
-      seq.push(notes[Math.floor(Math.random() * notes.length)]);
-    }
+    // 极简五声音阶 — 固定优美序列，零噪音
+    // Am 五声: A C D E G → 110 130.8 146.8 164.8 196 (低八度柔和)
+    const seq = [110, 130.8, 146.8, 164.8, 196, 164.8, 146.8, 130.8];
+    const noteLen = 3.2;
     seq.forEach((freq, i) => {
       const start = t + i * noteLen;
       const o = ctx.createOscillator(); o.type = 'sine';
       o.frequency.setValueAtTime(freq, start);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, start);
-      g.gain.linearRampToValueAtTime(0.07, start + 0.6);
-      g.gain.setValueAtTime(0.07, start + noteLen * 0.65);
-      g.gain.linearRampToValueAtTime(0, start + noteLen * 0.92);
+      g.gain.linearRampToValueAtTime(0.05, start + 0.8);
+      g.gain.setValueAtTime(0.05, start + noteLen * 0.6);
+      g.gain.linearRampToValueAtTime(0, start + noteLen * 0.9);
       o.connect(g); g.connect(mg);
       o.start(start); o.stop(start + noteLen);
       this._bgmNodes.push(o);
     });
-    // 超低频底音（A2=110Hz 持续低吟）
+    // 超低频底音 A2
     const bo = ctx.createOscillator(); bo.type = 'sine';
     bo.frequency.setValueAtTime(110, t);
     const bg = ctx.createGain();
     bg.gain.setValueAtTime(0, t);
-    bg.gain.linearRampToValueAtTime(0.05, t + 1);
-    bg.gain.setValueAtTime(0.05, t + seq.length * noteLen * 0.8);
-    bg.gain.linearRampToValueAtTime(0, t + seq.length * noteLen * 0.95);
+    bg.gain.linearRampToValueAtTime(0.04, t + 1.2);
+    bg.gain.setValueAtTime(0.04, t + seq.length * noteLen * 0.75);
+    bg.gain.linearRampToValueAtTime(0, t + seq.length * noteLen * 0.93);
     bo.connect(bg); bg.connect(mg);
     bo.start(t); bo.stop(t + seq.length * noteLen);
     this._bgmNodes.push(bo);
@@ -551,8 +546,8 @@ class Game {
       // 只剩一颗螺丝 → 支点，重心被重力拉下
       const sx = remaining[0].x, sy = remaining[0].y;
       const dx = panel.cx - sx, dy = panel.cy - sy; // 支点→重心向量
-      const currentAngle = Math.atan2(dx, dy); // 向量与垂直方向夹角
-      panel._targetAngle = -currentAngle * 0.5; // 重力将它往下拉
+      const currentAngle = Math.atan2(dx, dy); // 支点到重心向量与垂直方向夹角
+      panel._targetAngle = currentAngle * 0.55; // 重心被重力拉下木板的旋转角度
       panel._targetAngle = Math.max(-0.65, Math.min(0.65, panel._targetAngle));
       panel._pivotX = sx; panel._pivotY = sy;
       panel._targetOffX = 0; panel._targetOffY = 0;
@@ -803,21 +798,38 @@ class Game {
     // 标记每个面板是否被遮挡
     for(const p of sortedPanels){if(p.dropped)continue;p._blocked=this._blocked(p);}
 
-    // ★ 单轮层序渲染：画面板 → 面板上的螺丝（被遮=ghost半透明）
+    // ★ 首轮：逐层画面板 + 可操作螺丝
     for(const p of sortedPanels){
       if(p.dropped)continue;
-      // 物理倾斜 lerp（吸附阈值防浮动）
       const eps=0.003;
       if(Math.abs(p._targetAngle-p._physAngle)<eps) p._physAngle=p._targetAngle;
       else p._physAngle+=(p._targetAngle-p._physAngle)*0.12;
 
       this._drawPanel(ctx, p, clipBottom);
-      // 画螺丝：被遮 → ghost 半透明，未遮 → 正常
+      if(!p._blocked){
+        for(const s of p.screws){
+          if(s.removed)continue;
+          if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
+          const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
+          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
+        }
+      }
+    }
+
+    // ★ 二轮：在所有面板上方画被遮螺丝的极淡色点（alpha 0.13，不遮木板）
+    for(const p of sortedPanels){
+      if(p.dropped||!p._blocked)continue;
       for(const s of p.screws){
         if(s.removed)continue;
         if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
-        const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
-        this._drawScrew(ctx, s.x, s.y, s.color, p._blocked?false:(s===this.hinted), 0, sc, p._blocked);
+        ctx.globalAlpha = 0.13;
+        ctx.fillStyle = s.color.f;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill();
+        // 小锁
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#fff'; ctx.font = '7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', s.x, s.y);
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -956,7 +968,6 @@ class Game {
     ctx.restore();
   }
 
-  // ★ blocked=true → ghost半透明渲染（扁平、无光泽、一眼看出不可操作）
   _drawScrew(ctx, x, y, col, hint, rot, scale, blocked) {
     ctx.save(); ctx.translate(x,y);
     if(scale&&scale!==1)ctx.scale(scale,scale);
@@ -964,55 +975,36 @@ class Game {
 
     const r=12;
 
-    if(blocked){
-      // ghost 模式：极简扁平螺丝，半透明
-      ctx.globalAlpha = 0.22;
-      // 扁平填充
-      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(1.5,2.5,r,0,Math.PI*2); ctx.fill();
-      ctx.beginPath();
-      for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
-      ctx.closePath();
-      ctx.fillStyle = col.f; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 0.5; ctx.stroke();
-      // 简化十字槽
-      ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(-1,-r*0.4,2,r*0.8); ctx.fillRect(-r*0.4,-1,r*0.8,2);
-      // 小锁标记
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = '#fff'; ctx.font = '7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('🔒', 0, 0);
-    } else {
-      // 正常螺丝渲染
-      if(hint){const pulse=Math.sin(Date.now()/150)*0.4+0.6;ctx.shadowColor=col.g;ctx.shadowBlur=34*pulse;}
+    if(hint){const pulse=Math.sin(Date.now()/150)*0.4+0.6;ctx.shadowColor=col.g;ctx.shadowBlur=34*pulse;}
 
-      ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
 
-      ctx.beginPath();
-      for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
-      ctx.closePath();
+    ctx.beginPath();
+    for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
+    ctx.closePath();
 
-      const grad=ctx.createRadialGradient(-2,-2.5,r*0.05,1,1,r*1.2);
-      grad.addColorStop(0,lighten(col.f,55)); grad.addColorStop(0.2,lighten(col.f,25));
-      grad.addColorStop(0.5,col.f); grad.addColorStop(0.8,col.d); grad.addColorStop(1,'rgba(0,0,0,0.3)');
-      ctx.fillStyle=grad; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.6; ctx.stroke();
+    const grad=ctx.createRadialGradient(-2,-2.5,r*0.05,1,1,r*1.2);
+    grad.addColorStop(0,lighten(col.f,55)); grad.addColorStop(0.2,lighten(col.f,25));
+    grad.addColorStop(0.5,col.f); grad.addColorStop(0.8,col.d); grad.addColorStop(1,'rgba(0,0,0,0.3)');
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.6; ctx.stroke();
 
-      ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5; ctx.stroke();
 
-      const slotW=1.2,slotL=r*0.5;
-      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(-slotW,-slotL,slotW*2,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,slotW*2);
-      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
+    const slotW=1.2,slotL=r*0.5;
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(-slotW,-slotL,slotW*2,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,slotW*2);
+    ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
 
-      ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
 
-      if(hint){
-        const hp=Math.sin(Date.now()/180)*0.35+0.65;
-        ctx.strokeStyle='rgba(255,215,0,'+(0.4*hp)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
-        ctx.strokeStyle='rgba(255,255,255,'+(0.5+Math.sin(Date.now()/180)*0.3)+')'; ctx.lineWidth=3;
-        ctx.setLineDash([4,4]); ctx.lineDashOffset=-Date.now()/60; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
-      }
+    if(hint){
+      const hp=Math.sin(Date.now()/180)*0.35+0.65;
+      ctx.strokeStyle='rgba(255,215,0,'+(0.4*hp)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,'+(0.5+Math.sin(Date.now()/180)*0.3)+')'; ctx.lineWidth=3;
+      ctx.setLineDash([4,4]); ctx.lineDashOffset=-Date.now()/60; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
     }
 
     ctx.restore();
