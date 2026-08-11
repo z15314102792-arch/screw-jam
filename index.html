@@ -161,38 +161,42 @@ class Audio {
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
-    // 音乐盒风格 — 中高音、短促、有间隔、不持续（避免低频头疼）
-    // C大调五声音阶旋律 C5-E5-G5-A5-C6 (523-1047Hz)
+    // 舒缓氛围 — 慢板五声音阶 + 温暖铺底，放松不头疼
+    // Am 五声：A4 C5 D5 E5 G5 A5 (440-880Hz)
     const melody = [
-      523.2, 659.2, 784, 1047,  // C5 E5 G5 C6 ↑
-      784, 659.2, 523.2, 440,    // G5 E5 C5 A4 ↓
-      523.2, 587.3, 659.2, 784,  // C5 D5 E5 G5 ↑
-      659.2, 523.2, 440, 392,    // E5 C5 A4 G4 ↓
+      440, 523.2, 587.3, 659.2,  // A4 C5 D5 E5
+      784, 659.2, 587.3, 523.2,  // G5 E5 D5 C5
+      440, 523.2, 659.2, 784,     // A4 C5 E5 G5
+      659.2, 587.3, 523.2, 440,  // E5 D5 C5 A4
     ];
-    const beat = 0.55; // 轻快节奏
+    const beat = 0.92; // 慢板 ~65 BPM
     melody.forEach((freq, i) => {
-      const start = t + i * beat + (Math.random() - 0.5) * 0.04; // 微妙人性化
-      const o = ctx.createOscillator(); o.type = 'triangle';
+      const start = t + i * beat;
+      const o = ctx.createOscillator(); o.type = 'sine';
       o.frequency.setValueAtTime(freq, start);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, start);
-      g.gain.linearRampToValueAtTime(0.40, start + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, start + 0.38);
+      g.gain.linearRampToValueAtTime(0.28, start + 0.08); // 柔和起音
+      g.gain.setValueAtTime(0.28, start + beat * 0.55);
+      g.gain.linearRampToValueAtTime(0, start + beat * 0.92); // 自然衰减
       o.connect(g); g.connect(mg);
-      o.start(start); o.stop(start + 0.4);
+      o.start(start); o.stop(start + beat);
       this._bgmNodes.push(o);
     });
-    // 轻柔背景泛音（高八度，极淡）
-    const ho = ctx.createOscillator(); ho.type = 'sine';
-    ho.frequency.setValueAtTime(1047, t); // C6
-    const hg = ctx.createGain();
-    hg.gain.setValueAtTime(0, t);
-    hg.gain.linearRampToValueAtTime(0.06, t + 0.5);
-    hg.gain.setValueAtTime(0.06, t + melody.length * beat * 0.7);
-    hg.gain.linearRampToValueAtTime(0, t + melody.length * beat);
-    ho.connect(hg); hg.connect(mg);
-    ho.start(t); ho.stop(t + melody.length * beat);
-    this._bgmNodes.push(ho);
+    // 温暖泛音铺底 (Am 和弦 A-C-E 泛音)
+    const padNotes = [440, 523.2, 659.2];
+    padNotes.forEach(freq => {
+      const po = ctx.createOscillator(); po.type = 'sine';
+      po.frequency.setValueAtTime(freq, t);
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(0, t);
+      pg.gain.linearRampToValueAtTime(0.07, t + 1.2);
+      pg.gain.setValueAtTime(0.07, t + melody.length * beat * 0.75);
+      pg.gain.linearRampToValueAtTime(0, t + melody.length * beat);
+      po.connect(pg); pg.connect(mg);
+      po.start(t); po.stop(t + melody.length * beat);
+      this._bgmNodes.push(po);
+    });
     this._bgmTimer = setTimeout(() => this._bgmLoop(), melody.length * beat * 1000);
   }
   stopBGM() {
@@ -290,22 +294,23 @@ function genLevel(lv) {
 }
 
 function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
-  // 1. 先确定盒子顺序 — 首盒颜色是关卡核心难点
+  // 1. 盒子顺序 — 首盒颜色增加难度
   const boxes = []; colors.forEach(c => boxes.push(c)); shuffle(boxes);
   const firstBoxN = boxes[0].n;
 
-  // 2. 创建螺丝颜色池
+  // 2. 螺丝颜色池
   const screwCols = [];
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
-  // 3. 创建面板
+  // 3. 创建面板（聚集中心确保层间重叠）
   const panels = [];
   for (let i = 0; i < numPanel; i++) {
-    const pw = 70 + Math.random() * 80;
-    const ph = 50 + Math.random() * 60;
-    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.5;
-    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.45;
+    const pw = 75 + Math.random() * 85;
+    const ph = 52 + Math.random() * 62;
+    const spreadX = GW * 0.22, spreadY = GH * 0.20; // 更集中 → 更多重叠
+    const cx = GX + GW/2 + (Math.random() - 0.5) * spreadX;
+    const cy = GY + GH/2 + (Math.random() - 0.5) * spreadY;
     const wood = WOODS[i % WOODS.length];
     const shape = lv <= 1 ? SHAPE_RECT : ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)];
     panels.push({ id:i, cx, cy, w:pw, h:ph, shape, screws:[], dropped:false, wobble:false,
@@ -315,36 +320,58 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
-  // 4. 策略分配：每板先放一颗，首盒颜色避免放高层
+  // 4. 分配每板螺丝数（每板至少1颗，最多4颗，优先给重叠多的板）
+  const maxPerPanel = Math.min(4, Math.ceil(total / numPanel) + 1);
+  const screwCounts = new Array(numPanel).fill(1);
+  let remaining = total - numPanel;
+  while (remaining > 0) {
+    let best = null, bestScore = -1;
+    for (let i = 0; i < numPanel; i++) {
+      if (screwCounts[i] >= maxPerPanel) continue;
+      const score = countOverlaps(panels[i], panels);
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    if (best === null) break;
+    screwCounts[best]++; remaining--;
+  }
+
+  // 5. ★ 逐层放置：底层散布，上层直接盖下层螺丝（每颗都有意义）
   let si = 0;
-  panels.forEach(p => {
-    let col = screwCols[si];
-    if (p.layer >= numPanel * 0.35 && col.n === firstBoxN && si + 1 < total) {
-      for (let j = si + 1; j < Math.min(si + 8, total); j++) {
-        if (screwCols[j].n !== firstBoxN) { [screwCols[si], screwCols[j]] = [screwCols[j], screwCols[si]]; col = screwCols[si]; break; }
+  const maxLayer = panels[panels.length - 1].layer;
+  for (let layer = 0; layer <= maxLayer; layer++) {
+    const layerPanels = panels.filter(p => p.layer === layer);
+    for (const p of layerPanels) {
+      for (let k = 0; k < screwCounts[p.id] && si < total; k++) {
+        let pos;
+        if (layer === 0) {
+          // 底层：网格均匀散布
+          pos = screwSpreadPos(p, k, screwCounts[p.id]);
+        } else {
+          // 上层：找到可覆盖的下层螺丝，直接盖在上面
+          const targets = findCoverTargets(p, panels);
+          // 优先选尚未被本板其他螺丝覆盖的目标
+          const fresh = targets.filter(t => !p.screws.some(ps =>
+            Math.hypot(ps.x - t.x, ps.y - t.y) < 8));
+          const pool = fresh.length > 0 ? fresh : targets;
+          if (pool.length > 0) {
+            const t = pool[Math.floor(Math.random() * pool.length)];
+            pos = {
+              x: t.x + (Math.random() - 0.5) * 12,
+              y: t.y + (Math.random() - 0.5) * 12
+            };
+            if (!shapeContains(p.cx, p.cy, p.w, p.h, p.shape, pos.x, pos.y)) {
+              pos = { x: t.x, y: t.y };
+            }
+          } else {
+            // 无可覆盖目标 → 均匀散布（保底）
+            pos = screwSpreadPos(p, k, screwCounts[p.id]);
+          }
+        }
+        const col = assignColor(screwCols, si, p, panels, firstBoxN, total);
+        p.screws.push({ id: si, color: col, x: pos.x, y: pos.y, panelId: p.id, removed: false });
+        si++;
       }
     }
-    p.screws.push({ id: si, color: col, x: p.cx, y: p.cy, panelId: p.id, removed: false });
-    si++;
-  });
-
-  // 5. 剩余螺丝：首盒颜色强制放底层，其他随机
-  for (let i = si; i < total; i++) {
-    const col = screwCols[i];
-    let candidates = [...panels];
-    if (col.n === firstBoxN) {
-      candidates.sort((a, b) => a.layer - b.layer); // 底层优先
-    } else {
-      shuffle(candidates);
-    }
-    const p = candidates.find(p => p.screws.length < 4) || panels[Math.floor(Math.random() * panels.length)];
-    let sx, sy;
-    for (let t = 0; t < 20; t++) {
-      sx = p.cx + (Math.random() - 0.5) * p.w * 0.7;
-      sy = p.cy + (Math.random() - 0.5) * p.h * 0.7;
-      if (shapeContains(p.cx, p.cy, p.w, p.h, p.shape, sx, sy)) break;
-    }
-    p.screws.push({ id: i, color: col, x: sx, y: sy, panelId: p.id, removed: false });
   }
 
   const allScrews = panels.flatMap(p => p.screws);
@@ -352,6 +379,66 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
     level: lv, colors, panels, screws: allScrews, boxes, cap, tempMax,
     activeBox: boxes.shift(), activeCount: 0, temp: [],
   };
+}
+
+// 面板上均匀分布螺丝（网格法，避免挤在一起）
+function screwSpreadPos(p, idx, total) {
+  const cols = Math.ceil(Math.sqrt(total));
+  const rows = Math.ceil(total / cols);
+  const col = idx % cols;
+  const row = Math.floor(idx / cols);
+  const fx = (col + 0.5) / cols;
+  const fy = (row + 0.5) / rows;
+  const margin = 0.18;
+  const sx = p.cx - p.w/2 + (margin + fx * (1 - 2*margin)) * p.w;
+  const sy = p.cy - p.h/2 + (margin + fy * (1 - 2*margin)) * p.h;
+  const jx = (Math.random() - 0.5) * 8;
+  const jy = (Math.random() - 0.5) * 8;
+  if (shapeContains(p.cx, p.cy, p.w, p.h, p.shape, sx + jx, sy + jy)) {
+    return {x: sx + jx, y: sy + jy};
+  }
+  return {x: sx, y: sy};
+}
+
+// 找到上层面板可遮盖的下层螺丝
+function findCoverTargets(upper, panels) {
+  const targets = [];
+  for (const lp of panels) {
+    if (lp.layer >= upper.layer) continue;
+    if (lp.dropped) continue;
+    if (!_overlap(upper, lp)) continue;
+    for (const s of lp.screws) {
+      if (s.removed) continue;
+      if (shapeContains(upper.cx, upper.cy, upper.w, upper.h, upper.shape, s.x, s.y)) {
+        targets.push({x: s.x, y: s.y, screw: s, panel: lp});
+      }
+    }
+  }
+  return targets;
+}
+
+// 统计面板重叠数
+function countOverlaps(p, panels) {
+  let n = 0;
+  for (const op of panels) {
+    if (op.id === p.id) continue;
+    if (_overlap(p, op)) n++;
+  }
+  return n;
+}
+
+// 螺丝颜色分配：首盒颜色优先底层
+function assignColor(screwCols, si, panel, panels, firstBoxN, total) {
+  let col = screwCols[si];
+  if (col.n === firstBoxN && panel.layer >= 2 && si + 1 < total) {
+    for (let j = si + 1; j < Math.min(si + 10, total); j++) {
+      if (screwCols[j].n !== firstBoxN) {
+        [screwCols[si], screwCols[j]] = [screwCols[j], screwCols[si]];
+        col = screwCols[si]; break;
+      }
+    }
+  }
+  return col;
 }
 
 function _isSolvable(st) {
