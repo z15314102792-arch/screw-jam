@@ -12,9 +12,8 @@
 <meta name="browsermode" content="application">
 <meta name="full-screen" content="yes">
 <meta name="360-fullscreen" content="true">
-<title>螺丝消除 - 解压小游戏 v1.5</title>
+<title>螺丝消除 - 解压小游戏 v1.6</title>
 <script>
-// === 微信环境提前防护 ===
 (function(){
   document.addEventListener('touchmove', function(e) {
     if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault();
@@ -43,8 +42,8 @@
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;min-height:-webkit-fill-available;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;-webkit-overflow-scrolling:touch;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;position:fixed;top:0;left:0;width:100%;height:100%}
-#gc{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;-webkit-touch-callout:none}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;min-height:-webkit-fill-available;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;position:fixed;top:0;left:0;width:100%;height:100%}
+#gc{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
 #ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #ui>*{pointer-events:auto}
 #top{position:absolute;top:10px;left:0;width:100%;display:flex;justify-content:space-between;padding:0 14px}
@@ -96,7 +95,8 @@ body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;m
       <div class="r-text"><span class="r-icon">⬇️</span>颜色不匹配 → 螺丝<span class="r-hl">落入底部临时区</span></div>
       <div class="r-text"><span class="r-icon">📦</span>盒子装满自动换下一个颜色</div>
       <div class="r-text"><span class="r-icon">🪵</span>木板螺丝清空 → 木板<span class="r-hl">旋转掉落</span></div>
-      <div class="r-text"><span class="r-icon">⚠️</span>临时区满了就输了！</div>
+      <div class="r-text"><span class="r-icon">👁️</span>半透明木板，能<strong>看穿</strong>被遮住的螺丝</div>
+      <div class="r-text"><span class="r-icon">⚠️</span>临时区满了就输了！<span class="r-hl">计划好顺序</span></div>
     </div>
     <button class="btn-big" onclick="G.start(1)" style="margin-top:12px">开始游戏</button>
   </div></div>
@@ -139,13 +139,13 @@ class Audio {
         this.ctx = new (window.AudioContext||window.webkitAudioContext)();
         if (this.ctx.state === 'suspended') this.ctx.resume();
         this.master = this.ctx.createGain();
-        this.master.gain.value = 0.65;
+        this.master.gain.value = 0.8;
         this.master.connect(this.ctx.destination);
         this.bgmGain = this.ctx.createGain();
-        this.bgmGain.gain.value = 0.22;
+        this.bgmGain.gain.value = 0.55;
         this.bgmGain.connect(this.master);
-        console.log('AudioContext 已解锁');
-      } catch(e) { this.on = false; console.warn('AudioContext 创建失败:', e); }
+        console.log('AudioContext 已解锁, BGM增益='+(0.55*0.8).toFixed(2));
+      } catch(e) { this.on = false; console.warn('AudioContext:', e); }
     };
     if (typeof WeixinJSBridge !== 'undefined') {
       try { WeixinJSBridge.invoke('getNetworkType', {}, () => doUnlock()); } catch(e) {}
@@ -186,90 +186,55 @@ class Audio {
     };
 
     switch(k) {
-      case 'unscrew':
-        noise(0.1, 2500, 4500, 5, 0.07);
-        for(let i=0;i<3;i++) tone(2200+i*150, 0.03, 0.05, 'sine');
-        break;
-      case 'boxIn':
-        tone(750, 0.07, 0.09, 'triangle', 380);
-        break;
-      case 'boxFull':
-        [523,659,784].forEach((f,i) => {
-          setTimeout(() => tone(f, 0.28, 0.07, 'sine'), i*80);
-        });
-        break;
-      case 'panelDrop':
-        tone(180, 0.28, 0.12, 'sine', 50);
-        noise(0.15, 300, 1000, 2, 0.06);
-        break;
-      case 'panelWobble':
-        tone(110, 0.25, 0.05, 'sine');
-        break;
-      case 'win':
-        [523,659,784,1047,784,1047].forEach((f,i) => {
-          setTimeout(() => tone(f, 0.35, 0.09, 'sine'), i*95);
-        });
-        break;
-      case 'lose':
-        tone(180, 0.3, 0.07, 'square', 110);
-        break;
-      case 'hint':
-        [700,900].forEach((f,i) => setTimeout(() => tone(f, 0.2, 0.05, 'sine'), i*100));
-        break;
-      case 'click':
-        tone(1100, 0.025, 0.03, 'sine');
-        break;
-      case 'autoMatch':
-        tone(650, 0.12, 0.06, 'triangle', 400);
-        break;
+      case 'unscrew': noise(0.1,2500,4500,5,0.07);for(let i=0;i<3;i++)tone(2200+i*150,0.03,0.05,'sine');break;
+      case 'boxIn': tone(750,0.07,0.09,'triangle',380);break;
+      case 'boxFull': [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,0.28,0.07,'sine'),i*80));break;
+      case 'panelDrop': tone(180,0.28,0.12,'sine',50);noise(0.15,300,1000,2,0.06);break;
+      case 'panelWobble': tone(110,0.25,0.05,'sine');break;
+      case 'win': [523,659,784,1047,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.35,0.09,'sine'),i*95));break;
+      case 'lose': tone(180,0.3,0.07,'square',110);break;
+      case 'hint': [700,900].forEach((f,i)=>setTimeout(()=>tone(f,0.2,0.05,'sine'),i*100));break;
+      case 'click': tone(1100,0.025,0.03,'sine');break;
+      case 'autoMatch': tone(650,0.12,0.06,'triangle',400);break;
     }
   }
 
-  bgm() {
-    if (!this.on || !this.ctx) return;
-    this._bgmLoop();
-  }
+  bgm() { if (this.on && this.ctx) this._bgmLoop(); }
   _bgmLoop() {
-    if (!this.on) return;
+    if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
-    // Lo-fi 解压 BGM：bass + pads + soft beats
-    const chords = [
-      [220, 261.6, 329.6], // Am
-      [174.6, 220, 261.6], // F
-      [261.6, 329.6, 392],  // C
-      [196, 246.9, 329.6],  // G
-    ];
-    const bassNotes = [110, 87.3, 130.8, 98];
+    const chords = [[220,261.6,329.6],[174.6,220,261.6],[261.6,329.6,392],[196,246.9,329.6]];
+    const bassNotes = [110,87.3,130.8,98];
     const beatLen = 1.8;
 
     chords.forEach((ch, ci) => {
       const start = t + ci * beatLen;
-      // Bass — 加强音量
+      // Bass — 饱满低音
       const bo = ctx.createOscillator(); bo.type = 'triangle';
       bo.frequency.setValueAtTime(bassNotes[ci], start);
       const bg = ctx.createGain();
       bg.gain.setValueAtTime(0, start);
-      bg.gain.linearRampToValueAtTime(0.15, start + 0.04);
-      bg.gain.setValueAtTime(0.15, start + beatLen * 0.6);
+      bg.gain.linearRampToValueAtTime(0.35, start + 0.04);
+      bg.gain.setValueAtTime(0.35, start + beatLen * 0.6);
       bg.gain.exponentialRampToValueAtTime(0.001, start + beatLen * 0.9);
       bo.connect(bg); bg.connect(mg);
       bo.start(start); bo.stop(start + beatLen);
       this._bgmNodes.push(bo);
 
-      // Pad — 和弦铺底
+      // Pad — 和弦铺底，翻倍音量
       ch.forEach((f, fi) => {
         const po = ctx.createOscillator(); po.type = 'sine';
         po.frequency.setValueAtTime(f, start);
         const pg = ctx.createGain();
         pg.gain.setValueAtTime(0, start + fi * 0.06);
-        pg.gain.linearRampToValueAtTime(0.05, start + fi * 0.06 + 0.08);
+        pg.gain.linearRampToValueAtTime(0.12, start + fi * 0.06 + 0.08);
         pg.gain.exponentialRampToValueAtTime(0.001, start + beatLen * 0.85);
         po.connect(pg); pg.connect(mg);
         po.start(start + fi * 0.06); po.stop(start + beatLen);
         this._bgmNodes.push(po);
       });
 
-      // Hi-hat — 沙沙声
+      // Hi-hat
       for (let i = 0; i < 4; i++) {
         const ht = start + i * (beatLen / 4);
         const buf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
@@ -277,7 +242,7 @@ class Audio {
         for (let j = 0; j < d.length; j++) d[j] = (Math.random()*2-1) * Math.exp(-j/(ctx.sampleRate*0.008));
         const hs = ctx.createBufferSource(); hs.buffer = buf;
         const hf = ctx.createBiquadFilter(); hf.type = 'highpass'; hf.frequency.value = 6000;
-        const hg = ctx.createGain(); hg.gain.setValueAtTime(0.04, ht); hg.gain.exponentialRampToValueAtTime(0.001, ht + 0.04);
+        const hg = ctx.createGain(); hg.gain.setValueAtTime(0.07, ht); hg.gain.exponentialRampToValueAtTime(0.001, ht + 0.04);
         hs.connect(hf); hf.connect(hg); hg.connect(mg);
         hs.start(ht); hs.stop(ht + 0.04);
         this._bgmNodes.push(hs);
@@ -287,7 +252,7 @@ class Audio {
       if (ci % 2 === 0) {
         const kt = start + beatLen * 0.02;
         const to = ctx.createOscillator(); to.type = 'sine'; to.frequency.setValueAtTime(300, kt);
-        const tg = ctx.createGain(); tg.gain.setValueAtTime(0.03, kt); tg.gain.exponentialRampToValueAtTime(0.001, kt + 0.08);
+        const tg = ctx.createGain(); tg.gain.setValueAtTime(0.05, kt); tg.gain.exponentialRampToValueAtTime(0.001, kt + 0.08);
         to.connect(tg); tg.connect(mg); to.start(kt); to.stop(kt + 0.08);
         this._bgmNodes.push(to);
       }
@@ -324,31 +289,20 @@ const WOODS = [
 ];
 
 function genLevel(lv) {
-  // 难度曲线 — 比 v1.4 更难：更少临时位、更多面板、面板更集中重叠
+  // 参考真 ScrewJam：关键难度来自面板重叠遮挡+暂存区限制，而非减少格数
   let numCol, cap, numPanel, tempMax;
-  if (lv === 1) {
-    numCol = 2; cap = 3; numPanel = 3; tempMax = 5;
-  } else if (lv === 2) {
-    numCol = 2; cap = 4; numPanel = 4; tempMax = 5;
-  } else if (lv <= 3) {
-    numCol = 3; cap = 3; numPanel = 5; tempMax = 5;
-  } else if (lv <= 5) {
-    numCol = 3; cap = 3; numPanel = 6; tempMax = 5;
-  } else if (lv <= 7) {
-    numCol = 4; cap = 3; numPanel = 7; tempMax = 6;
-  } else if (lv <= 10) {
-    numCol = 4; cap = 3; numPanel = 8; tempMax = 6;
-  } else if (lv <= 13) {
-    numCol = 5; cap = 3; numPanel = Math.min(8 + (lv-11), 9); tempMax = 6;
-  } else if (lv <= 17) {
-    numCol = 5; cap = 3; numPanel = 9; tempMax = 7;
-  } else {
-    numCol = 6; cap = 3; numPanel = Math.min(9 + Math.floor((lv-18)/4), 10); tempMax = 8;
-  }
+  if (lv === 1)               { numCol = 2; cap = 3; numPanel = 3; tempMax = 6; }
+  else if (lv === 2)          { numCol = 2; cap = 4; numPanel = 5; tempMax = 5; }
+  else if (lv <= 3)           { numCol = 3; cap = 3; numPanel = 6; tempMax = 5; }
+  else if (lv <= 5)           { numCol = 3; cap = 3; numPanel = 7; tempMax = 5; }
+  else if (lv <= 7)           { numCol = 4; cap = 3; numPanel = 8; tempMax = 5; }
+  else if (lv <= 10)          { numCol = 4; cap = 3; numPanel = 9; tempMax = 5; }
+  else if (lv <= 13)          { numCol = 5; cap = 3; numPanel = 9; tempMax = 6; }
+  else if (lv <= 17)          { numCol = 5; cap = 3; numPanel = 10; tempMax = 6; }
+  else                        { numCol = 6; cap = 3; numPanel = 10; tempMax = 7; }
 
   const total = numCol * cap;
   const colors = COLS.slice(0, numCol);
-
   const GX=30, GY=130, GW=360, GH=340;
 
   let attempts = 0;
@@ -365,14 +319,14 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
-  // 面板集中放置 — 增加重叠和遮挡
+  // 面板更大 + 围绕中心聚集 = 更多重叠遮挡 → 更难
   const panels = [];
   for (let i = 0; i < numPanel; i++) {
-    const pw = 70 + Math.random() * 80;
-    const ph = 50 + Math.random() * 60;
-    // 面板围绕中心区域分布，范围收窄以增加重叠
-    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.6;
-    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.55;
+    const pw = 75 + Math.random() * 75;  // 75-150（更大）
+    const ph = 55 + Math.random() * 55;  // 55-110（更大）
+    // 中心聚集，确保重叠
+    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.55;
+    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.5;
     const wood = WOODS[i % WOODS.length];
     panels.push({ id:i, cx, cy, w:pw, h:ph, screws:[], dropped:false, wobble:false,
       wood: wood, layer: i
@@ -382,24 +336,17 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
-  // 每板至少1颗螺丝
   let si = 0;
   panels.forEach(p => {
-    p.screws.push({
-      id: si, color: screwCols[si],
-      x: p.cx, y: p.cy, panelId: p.id, removed: false, animT: 0,
-    });
+    p.screws.push({ id: si, color: screwCols[si], x: p.cx, y: p.cy, panelId: p.id, removed: false, animT: 0 });
     si++;
   });
   while (si < total) {
     const p = panels[Math.floor(Math.random() * panels.length)];
     const cnt = p.screws.length;
-    const offX = (cnt%2===0?-1:1) * p.w * 0.28;
-    const offY = (cnt<2?-1:1) * p.h * 0.22;
-    p.screws.push({
-      id: si, color: screwCols[si],
-      x: p.cx + offX, y: p.cy + offY, panelId: p.id, removed: false, animT: 0,
-    });
+    const offX = (cnt%2===0?-1:1) * p.w * 0.25;
+    const offY = (cnt<2?-1:1) * p.h * 0.2;
+    p.screws.push({ id: si, color: screwCols[si], x: p.cx + offX, y: p.cy + offY, panelId: p.id, removed: false, animT: 0 });
     si++;
   }
 
@@ -486,16 +433,13 @@ function _isSolvable(st) {
   return screws.every(s => s.removed);
 }
 
-function shuffle(a) {
-  for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
-}
-
+function shuffle(a) { for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} }
 function _overlap(a, b) {
   return !(a.cx-a.w/2 > b.cx+b.w/2 || a.cx+a.w/2 < b.cx-b.w/2 ||
            a.cy-a.h/2 > b.cy+b.h/2 || a.cy+a.h/2 < b.cy-b.h/2);
 }
 
-// ==================== 游戏 ====================
+// ==================== 游戏主类 ====================
 class Game {
   constructor() {
     this.cvs = document.getElementById('gc');
@@ -509,7 +453,7 @@ class Game {
     this.paused = false;
     this.busy = false;
     this._autoClearing = false;
-    this._flyAuto = []; // 自动收纳飞行螺丝
+    this._flyAuto = [];
     this._size();
     window.addEventListener('resize', () => this._size());
     this.cvs.addEventListener('click', e => this._tap(e));
@@ -527,7 +471,6 @@ class Game {
 
   _deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
-  // ===== 关卡 =====
   start(lv) {
     this.st = genLevel(lv);
     this._seed = this._deepClone(this.st);
@@ -541,58 +484,41 @@ class Game {
     this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
     this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
     hideAll();
-    document.getElementById('lv').textContent = `第 ${lv} 关`;
+    document.getElementById('lv').textContent = '第 ' + lv + ' 关';
     this.audio.bgm();
   }
 
-  next() {
-    this._seed = null;
-    this.start(this.st.level + 1);
-  }
+  next() { this._seed = null; this.start(this.st.level + 1); }
 
   restart() {
     if (this._seed) {
       this.st = this._deepClone(this._seed);
-      this.ps = [];
-      this.hist = [];
-      this.hinted = null;
-      this.busy = false;
-      this.paused = false;
-      this._autoClearing = false;
-      this._flyAuto = [];
+      this.ps = []; this.hist = []; this.hinted = null;
+      this.busy = false; this.paused = false;
+      this._autoClearing = false; this._flyAuto = [];
       this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
       this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
       hideAll();
-      document.getElementById('lv').textContent = `第 ${this.st.level} 关`;
+      document.getElementById('lv').textContent = '第 ' + this.st.level + ' 关';
       this.audio.bgm();
-    } else {
-      this.start(this.st.level);
-    }
+    } else { this.start(this.st.level); }
   }
 
-  pause() {
-    this.paused = true;
-    document.getElementById('ovPause').classList.remove('hidden');
-  }
-
-  resume() {
-    this.paused = false;
-    document.getElementById('ovPause').classList.add('hidden');
-  }
-
+  pause() { this.paused = true; document.getElementById('ovPause').classList.remove('hidden'); }
+  resume() { this.paused = false; document.getElementById('ovPause').classList.add('hidden'); }
   sound() {
     this.audio.on = !this.audio.on;
     document.getElementById('btnSound').textContent = this.audio.on ? '🔊' : '🔇';
     if (!this.audio.on) this.audio.stopBGM(); else this.audio.bgm();
   }
 
-  // ===== 核心 =====
   _tap(e) {
     if (this.paused || this.busy || !this.st || this._autoClearing) return;
     const mx = (e.clientX - this.cvs.getBoundingClientRect().left);
     const my = (e.clientY - this.cvs.getBoundingClientRect().top);
-
     const st = this.st;
+
+    // 只允许点击可访问的螺丝（面板未被遮挡的）
     let best = null, bestD = Infinity;
     for (const s of st.screws) {
       if (s.removed) continue;
@@ -616,28 +542,21 @@ class Game {
   _remove(screw) {
     const st = this.st;
     this.busy = true;
-
     this.hist.push({
       sid: screw.id,
       box: st.activeBox ? {...st.activeBox} : null,
-      cnt: st.activeCount,
-      queue: [...st.boxes],
+      cnt: st.activeCount, queue: [...st.boxes],
       temp: st.temp.map(t => ({...t})),
-      panels: st.panels.map(p => ({
-        id: p.id, dropped: p.dropped, wobble: p.wobble, dropStart: p.dropStart,
-        dropOffY: p.dropOffY, dropAngle: p.dropAngle,
-      })),
+      panels: st.panels.map(p => ({ id: p.id, dropped: p.dropped, wobble: p.wobble, dropStart: p.dropStart, dropOffY: p.dropOffY, dropAngle: p.dropAngle })),
     });
 
     const target = this._getTarget(screw);
     screw.flyTarget = target;
     screw.flyStart = null;
     screw.clickScale = 0.85;
-
     this._animUn(screw, () => {
       this.audio.play('unscrew');
       this.ps.push(...sparks(screw.x, screw.y, screw.color.f, 8));
-
       screw.flyStart = { x: screw.x, y: screw.y - 35 };
       screw.animPhase = 'flying';
       this._animFly(screw, () => {
@@ -666,12 +585,9 @@ class Game {
 
     if (st.activeBox && st.activeBox.n === c.n) {
       if (!st.combo) st.combo = 0;
-      st.combo++;
-      st.comboTime = Date.now();
+      st.combo++; st.comboTime = Date.now();
       if (st.combo >= 3) this.ps.push(...burst(210, 65, '#ffd700', 6));
-
-      st.activeCount++;
-      this.audio.play('boxIn');
+      st.activeCount++; this.audio.play('boxIn');
       st.boxGlow = Date.now();
       this.ps.push(...sparks(screw.x, screw.y, c.g, 6));
       if (st.activeCount >= st.cap) {
@@ -691,7 +607,6 @@ class Game {
       st.temp.push({ color: c });
       this.audio.play('boxIn');
     }
-
     this._checkPanels();
     if (st.screws.every(s => s.removed)) {
       setTimeout(() => this._autoClearTemp(), 600);
@@ -720,12 +635,8 @@ class Game {
   _autoClearTemp() {
     const st = this.st;
     if (st.temp.length === 0) {
-      // 等飞行螺丝全部落地后再结束
-      if (this._flyAuto.length === 0) {
-        setTimeout(() => this._win(), 300);
-      } else {
-        setTimeout(() => this._autoClearTemp(), 150);
-      }
+      if (this._flyAuto.length === 0) setTimeout(() => this._win(), 300);
+      else setTimeout(() => this._autoClearTemp(), 200);
       return;
     }
     this._autoClearing = true;
@@ -734,27 +645,17 @@ class Game {
       if (st.temp.length === 0) {
         if (this._flyAuto.length === 0) {
           this._autoClearing = false;
-          setTimeout(() => this._win(), 400);
-        } else {
-          setTimeout(processNext, 150);
-        }
+          setTimeout(() => this._win(), 500);
+        } else { setTimeout(processNext, 250); }
         return;
       }
-
       if (!st.activeBox) {
         this._autoClearing = false;
-        if (this._flyAuto.length === 0) {
-          setTimeout(() => this._win(), 400);
-        } else {
-          setTimeout(() => {
-            if (this._flyAuto.length === 0) this._win();
-            else setTimeout(() => { if (this._flyAuto.length===0) this._win(); }, 300);
-          }, 300);
-        }
+        const wait = () => { if (this._flyAuto.length===0) this._win(); else setTimeout(wait, 300); };
+        setTimeout(wait, 500);
         return;
       }
 
-      // 找匹配当前盒子的暂存螺丝
       let idx = -1;
       for (let i = st.temp.length-1; i >= 0; i--) {
         if (st.temp[i].color.n === st.activeBox.n) { idx = i; break; }
@@ -762,7 +663,6 @@ class Game {
 
       if (idx >= 0) {
         const c = st.temp[idx].color;
-        // 从暂存区位置飞到盒子 — 带动画！
         const tx = (420 - st.tempMax * 44) / 2;
         const fromX = tx + idx * 44 + 19, fromY = 540;
         const toX = 196, toY = 80;
@@ -770,42 +670,39 @@ class Game {
         this.audio.play('autoMatch');
         st.temp.splice(idx, 1);
 
-        // 创建飞行螺丝对象，和正常拧出一样走弧线动画
+        // 飞行螺丝 — 35帧≈583ms，够慢才看得清
         this._flyAuto.push({
           x: fromX, y: fromY,
           tx: toX, ty: toY,
           color: c,
-          frame: 0, dur: 20,
-          boxN: st.activeBox.n,
+          frame: 0, dur: 35,
         });
 
-        // 飞行结束后才计数
+        // 等飞行结束再更新计数
         setTimeout(() => {
           st.activeCount++;
           st.boxGlow = Date.now();
-          this.ps.push(...sparks(toX, toY, st.activeBox.g, 8));
+          this.ps.push(...burst(toX, toY, st.activeBox.g, 10));
           if (st.activeCount >= st.cap) {
             this.audio.play('boxFull');
-            this.ps.push(...burst(210, 65, st.activeBox.g, 14));
+            this.ps.push(...burst(210, 65, st.activeBox.g, 16));
             st.activeBox = st.boxes.length > 0 ? st.boxes.shift() : null;
             st.activeCount = 0;
           }
-          processNext();
-        }, 420);
+          // 给一点间隔再看下一个
+          setTimeout(processNext, 350);
+        }, 600);
       } else {
-        // 不匹配，换下一个盒子
         if (st.boxes.length > 0) {
           const curBox = st.activeBox;
           st.activeBox = st.boxes.shift();
           st.activeCount = 0;
           st.boxes.push(curBox);
-          setTimeout(processNext, 250);
+          setTimeout(processNext, 300);
         } else {
           this._autoClearing = false;
-          setTimeout(() => {
-            if (this._flyAuto.length === 0) this._win();
-            else setTimeout(() => { if (this._flyAuto.length===0) this._win(); }, 300);
-          }, 400);
+          const wait = () => { if (this._flyAuto.length===0) this._win(); else setTimeout(wait, 300); };
+          setTimeout(wait, 500);
         }
       }
     };
@@ -817,11 +714,8 @@ class Game {
       if (p.dropped || p.dropStart) continue;
       const remain = p.screws.filter(s => !s.removed).length;
       if (remain === 0) {
-        p.dropStart = Date.now();
-        p.dropAngle = 0;
-        p.dropOffY = 0;
-        p.dropPivotX = p.cx;
-        p.dropPivotY = p.cy;
+        p.dropStart = Date.now(); p.dropAngle = 0; p.dropOffY = 0;
+        p.dropPivotX = p.cx; p.dropPivotY = p.cy;
         this.audio.play('panelDrop');
         this.ps.push(...panelBurst(p));
         setTimeout(() => { p.dropped = true; }, 800);
@@ -840,7 +734,7 @@ class Game {
     if (undos > st.screws.length * 0.35) stars = 2;
     if (undos > st.screws.length * 0.7) stars = 1;
     document.getElementById('starsShow').textContent = '⭐'.repeat(stars)+'☆'.repeat(3-stars);
-    document.getElementById('winMsg').textContent = `第 ${st.level} 关完成！撤销 ${undos} 次`;
+    document.getElementById('winMsg').textContent = '第 ' + st.level + ' 关完成！撤销 ' + undos + ' 次';
     document.getElementById('ovWin').classList.remove('hidden');
     for (let i=0;i<40;i++) {
       setTimeout(() => {
@@ -854,25 +748,13 @@ class Game {
     const rec = this.hist.pop();
     const s = this.st.screws.find(s => s.id === rec.sid);
     if (!s) return;
-    s.removed = false;
-    s.animPhase = null;
-    s.flyStart = null;
-    s.flyTarget = null;
-    s.clickScale = 1;
-    this.st.activeBox = rec.box;
-    this.st.activeCount = rec.cnt;
-    this.st.boxes = rec.queue;
+    s.removed = false; s.animPhase = null; s.flyStart = null; s.flyTarget = null; s.clickScale = 1;
+    this.st.activeBox = rec.box; this.st.activeCount = rec.cnt; this.st.boxes = rec.queue;
     this.st.temp = rec.temp;
     if (rec.panels) {
       for (const ps of rec.panels) {
         const p = this.st.panels.find(p => p.id === ps.id);
-        if (p) {
-          p.dropped = ps.dropped;
-          p.wobble = ps.wobble;
-          p.dropStart = ps.dropStart;
-          p.dropOffY = ps.dropOffY;
-          p.dropAngle = ps.dropAngle;
-        }
+        if (p) { p.dropped = ps.dropped; p.wobble = ps.wobble; p.dropStart = ps.dropStart; p.dropOffY = ps.dropOffY; p.dropAngle = ps.dropAngle; }
       }
     }
     this.audio.play('click');
@@ -889,24 +771,16 @@ class Game {
       if (st.activeBox && s.color.n === st.activeBox.n) { best = s; break; }
       if (!best) best = s;
     }
-    if (best) {
-      this.hinted = best;
-      this.audio.play('hint');
-      setTimeout(() => { this.hinted = null; }, 2000);
-    }
+    if (best) { this.hinted = best; this.audio.play('hint'); setTimeout(() => { this.hinted = null; }, 2000); }
   }
 
   // ===== 动画 =====
   _animUn(screw, cb) {
-    const dur = 14;
-    let f = 0;
+    const dur = 14; let f = 0;
     const sx = screw.x, sy = screw.y;
     const step = () => {
-      f++;
-      screw.animPhase = 'unscrewing';
-      screw.animT = f / dur;
-      screw.animX = sx;
-      screw.animY = sy - 35 * screw.animT;
+      f++; screw.animPhase = 'unscrewing'; screw.animT = f / dur;
+      screw.animX = sx; screw.animY = sy - 35 * screw.animT;
       screw.animR = screw.animT * Math.PI * 2.5;
       if (f % 3 === 0) this.ps.push(...sparks(screw.animX, screw.animY, screw.color.f, 2));
       if (screw.clickScale && screw.clickScale < 1) screw.clickScale += 0.02;
@@ -917,25 +791,17 @@ class Game {
   }
 
   _animFly(screw, cb) {
-    const dur = 18;
-    let f = 0;
-    const from = screw.flyStart;
-    const to = screw.flyTarget;
+    const dur = 18; let f = 0;
+    const from = screw.flyStart, to = screw.flyTarget;
     const step = () => {
-      f++;
-      const t = f / dur;
+      f++; const t = f / dur;
       const ease = 1 - Math.pow(1 - t, 3);
       screw.flyX = from.x + (to.x - from.x) * ease;
-      const arc = Math.sin(t * Math.PI) * 60;
-      screw.flyY = from.y + (to.y - from.y) * ease - arc;
-      screw.flyScale = 1 - t * 0.4;
-      screw.flyR = t * Math.PI * 1.5;
+      screw.flyY = from.y + (to.y - from.y) * ease - Math.sin(t * Math.PI) * 60;
+      screw.flyScale = 1 - t * 0.4; screw.flyR = t * Math.PI * 1.5;
       if (f % 2 === 0) this.ps.push({
-        x: screw.flyX + (Math.random()-0.5)*6,
-        y: screw.flyY + (Math.random()-0.5)*6,
-        vx: (Math.random()-0.5)*1, vy: (Math.random()-0.5)*1,
-        life: 0.6, decay: 0.05, size: 1.5 + Math.random()*2,
-        color: screw.color.g,
+        x: screw.flyX+(Math.random()-0.5)*6, y: screw.flyY+(Math.random()-0.5)*6,
+        vx:(Math.random()-0.5)*1, vy:(Math.random()-0.5)*1, life:0.6, decay:0.05, size:1.5+Math.random()*2, color:screw.color.g
       });
       if (f >= dur) { screw.flyX = to.x; screw.flyY = to.y; cb(); }
       else requestAnimationFrame(step);
@@ -944,15 +810,11 @@ class Game {
   }
 
   // ===== 渲染 =====
-  _loop() {
-    this._draw();
-    requestAnimationFrame(() => this._loop());
-  }
+  _loop() { this._draw(); requestAnimationFrame(() => this._loop()); }
 
   _draw() {
     const ctx = this.ctx, W = this.W, H = this.H, S = this.S;
     ctx.clearRect(0, 0, this.cvs.width, this.cvs.height);
-
     ctx.fillStyle = '#12122a';
     ctx.fillRect(0, 0, this.cvs.width, this.cvs.height);
     ctx.strokeStyle = 'rgba(255,255,255,0.025)';
@@ -999,26 +861,43 @@ class Game {
     const clipBottom = GY + GH;
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(GX, clipBottom);
-    ctx.lineTo(GX+GW, clipBottom);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(GX, clipBottom); ctx.lineTo(GX+GW, clipBottom); ctx.stroke();
 
     ctx.save();
     ctx.translate(shakeX, shakeY);
+
+    // === 分层绘制：面板+螺丝按层级交织 ===
+    // 真实 ScrewJam 做法：底层→顶层，每层面板半透明，螺丝画在面板之上
     ctx.save();
     ctx.beginPath();
-    ctx.rect(GX-30, GY-30, GW+60, GH+100);
+    ctx.rect(GX-40, GY-40, GW+80, GH+140);
     ctx.clip();
 
-    const panels = [...st.panels].sort((a,b) => a.layer - b.layer);
-    for (const p of panels) {
-      if (p.dropped) continue;
-      this._drawPanel(ctx, p, clipBottom);
-    }
-    ctx.restore();
+    const sortedPanels = [...st.panels].sort((a,b) => a.layer - b.layer);
 
-    // 绘制正常螺丝（含飞行中的）
+    // 第一步：收集每层哪些面板被遮挡
+    for (const p of sortedPanels) {
+      if (p.dropped) continue;
+      p._blocked = this._blocked(p);
+    }
+
+    // 第二步：逐层绘制面板+螺丝（底层到顶层）
+    for (const p of sortedPanels) {
+      if (p.dropped) continue;
+      // 半透明面板 — 层越高越不透明，但底层也能看穿
+      const panelAlpha = 0.62 + p.layer * 0.045; // 0.62(底层)→0.93(顶层)
+      this._drawPanel(ctx, p, clipBottom, panelAlpha);
+
+      // 面板上的螺丝 — 被遮挡的螺丝半透明显示
+      for (const s of p.screws) {
+        if (s.removed) continue;
+        if (s.animPhase === 'unscrewing' || s.animPhase === 'flying') continue;
+        const sc = (s.clickScale && s.clickScale < 1) ? s.clickScale : 1;
+        this._drawScrew(ctx, s.x, s.y, s.color, s === this.hinted, 0, sc, p._blocked);
+      }
+    }
+
+    // 第三步：绘制飞行/拧动中的螺丝（在空中，盖在面板之上）
     for (const s of st.screws) {
       if (s.removed && s.animPhase !== 'flying') continue;
       let sx = s.x, sy = s.y, rot = 0, sc = 1;
@@ -1029,36 +908,32 @@ class Game {
       } else if (s.clickScale && s.clickScale < 1) {
         sc = s.clickScale;
       }
-      this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot, sc);
+      this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot, sc, false);
     }
 
-    // 绘制自动收纳飞行螺丝 — 和正常螺丝一样的弧线飞行
+    ctx.restore(); // 解除蒙版
+
+    // 第四步：自动收纳的飞行螺丝（飞向盒子，也画在蒙版外）
     for (const fs of this._flyAuto) {
-      const t = fs.frame / fs.dur;
+      const t = Math.min(fs.frame / fs.dur, 1);
       const ease = 1 - Math.pow(1 - t, 3);
-      const arc = Math.sin(t * Math.PI) * 55;
+      const arc = Math.sin(t * Math.PI) * 70;
       const sx = fs.x + (fs.tx - fs.x) * ease;
       const sy = fs.y + (fs.ty - fs.y) * ease - arc;
-      const sc = 1 - t * 0.4;
+      const sc = Math.max(0.7, 1 - t * 0.3);
       const rot = t * Math.PI * 1.5;
-      this._drawScrew(ctx, sx, sy, fs.color, false, rot, sc);
+      this._drawScrew(ctx, sx, sy, fs.color, false, rot, sc, false);
       // 拖尾粒子
       if (fs.frame % 2 === 0) this.ps.push({
-        x: sx + (Math.random()-0.5)*5,
-        y: sy + (Math.random()-0.5)*5,
-        vx: (Math.random()-0.5)*1, vy: (Math.random()-0.5)*1,
-        life: 0.5, decay: 0.05, size: 1.5 + Math.random()*2,
-        color: fs.color.g,
+        x: sx+(Math.random()-0.5)*8, y: sy+(Math.random()-0.5)*8,
+        vx:(Math.random()-0.5)*1.5, vy:(Math.random()-0.5)*1.5, life:0.6, decay:0.05, size:2+Math.random()*3, color:fs.color.g
       });
     }
 
-    // 更新飞行螺丝
-    const alive = [];
-    for (const fs of this._flyAuto) {
-      fs.frame++;
-      if (fs.frame < fs.dur) alive.push(fs);
-    }
-    this._flyAuto = alive;
+    // 更新+清除飞行螺丝
+    const aliveFly = [];
+    for (const fs of this._flyAuto) { fs.frame++; if (fs.frame < fs.dur) aliveFly.push(fs); }
+    this._flyAuto = aliveFly;
 
     for (const p of this.ps) {
       ctx.globalAlpha = p.life;
@@ -1066,27 +941,28 @@ class Game {
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    ctx.restore();
+    ctx.restore(); // 解除 shake 位移
 
     this._drawBoxes(ctx, st);
     this._drawTemp(ctx, st);
 
     if (this._autoClearing) {
-      ctx.fillStyle = 'rgba(255,215,0,0.7)';
-      ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei"';
+      const remaining = st.temp.length + this._flyAuto.length;
+      ctx.fillStyle = 'rgba(255,215,0,0.75)';
+      ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei"';
       ctx.textAlign = 'center';
-      ctx.fillText('✨ 自动收纳暂存螺丝...', 210, 490);
+      ctx.fillText('✨ 自动收纳中… 剩余 ' + remaining + ' 颗螺丝', 210, 490);
     }
 
     if (st.combo && st.combo > 1) {
       const alpha = Math.max(0, 1 - (Date.now() - st.comboTime) / 1200);
-      ctx.fillStyle = `rgba(255,215,0,${alpha})`;
+      ctx.fillStyle = 'rgba(255,215,0,' + alpha + ')';
       ctx.font = 'bold 18px "PingFang SC","Microsoft YaHei"';
       ctx.textAlign = 'center';
-      ctx.fillText(`🔥 连击 x${st.combo}`, 210, 310);
+      ctx.fillText('🔥 连击 x' + st.combo, 210, 310);
     }
 
-    ctx.restore();
+    ctx.restore(); // 解除 S 缩放
 
     this.ps = this.ps.filter(p => {
       p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= p.decay;
@@ -1094,7 +970,7 @@ class Game {
     });
   }
 
-  _drawPanel(ctx, p, clipBottom) {
+  _drawPanel(ctx, p, clipBottom, alpha) {
     const R = 16;
     const x = p.cx - p.w/2, y = p.cy - p.h/2;
     const wood = p.wood || WOODS[0];
@@ -1104,8 +980,7 @@ class Game {
       const elapsed = (Date.now() - p.dropStart) / 1000;
       dropOffY = elapsed * elapsed * 160;
       dropAngle = Math.sin(elapsed * 2.5) * 0.35 * Math.min(elapsed * 1.5, 1);
-      p.dropOffY = dropOffY;
-      p.dropAngle = dropAngle;
+      p.dropOffY = dropOffY; p.dropAngle = dropAngle;
       if (p.cy + dropOffY - p.h/2 > clipBottom + 80) return;
     }
 
@@ -1115,7 +990,6 @@ class Game {
       const wb = Math.sin(Date.now()/130) * 2;
       ctx.translate(wb, 0);
     }
-
     if (p.dropStart) {
       ctx.translate(p.cx, p.cy);
       if (dropAngle) ctx.rotate(dropAngle);
@@ -1123,44 +997,50 @@ class Game {
       ctx.translate(-p.cx, -p.cy);
     }
 
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    rrect(ctx, x+3, y+3, p.w, p.h, R);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    rrect(ctx, x+1, y+1, p.w, p.h, R);
+    // 面板阴影（投射到下方被遮挡的面板上）
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    rrect(ctx, x+5, y+5, p.w, p.h, R);
     ctx.fill();
 
+    // 半透明木质面板 — alpha控制透明度
     const grad = ctx.createLinearGradient(x, y, x+p.w, y+p.h);
-    grad.addColorStop(0, wood.light);
-    grad.addColorStop(0.35, wood.base);
-    grad.addColorStop(0.7, wood.base);
-    grad.addColorStop(1, wood.dark);
+    const r1 = parseInt(wood.light.slice(1,3),16), g1 = parseInt(wood.light.slice(3,5),16), b1 = parseInt(wood.light.slice(5,7),16);
+    const r2 = parseInt(wood.base.slice(1,3),16), g2 = parseInt(wood.base.slice(3,5),16), b2 = parseInt(wood.base.slice(5,7),16);
+    const r3 = parseInt(wood.dark.slice(1,3),16), g3 = parseInt(wood.dark.slice(3,5),16), b3 = parseInt(wood.dark.slice(5,7),16);
+
+    grad.addColorStop(0, 'rgba('+r1+','+g1+','+b1+','+alpha+')');
+    grad.addColorStop(0.35, 'rgba('+r2+','+g2+','+b2+','+alpha+')');
+    grad.addColorStop(0.7, 'rgba('+r2+','+g2+','+b2+','+alpha+')');
+    grad.addColorStop(1, 'rgba('+r3+','+g3+','+b3+','+alpha+')');
     ctx.fillStyle = grad;
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.fill();
 
+    // 高光（也半透明）
     const hiGrad = ctx.createLinearGradient(x, y, x, y+p.h*0.45);
-    hiGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
+    hiGrad.addColorStop(0, 'rgba(255,255,255,'+(0.18*alpha)+')');
     hiGrad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = hiGrad;
     rrect(ctx, x+5, y+3, p.w-10, p.h*0.35, R-4);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    // 边框
+    ctx.strokeStyle = 'rgba(0,0,0,'+(0.15*alpha)+')';
     ctx.lineWidth = 1.2;
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.strokeStyle = 'rgba(255,255,255,'+(0.12*alpha)+')';
     ctx.lineWidth = 0.8;
     rrect(ctx, x+1.5, y+1.5, p.w-3, p.h-3, R-1);
     ctx.stroke();
 
+    // 木纹纹理（也要半透明）
     ctx.save();
     ctx.beginPath();
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.clip();
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+    ctx.strokeStyle = 'rgba(0,0,0,'+(0.04*alpha)+')';
     ctx.lineWidth = 0.6;
     for (let i = -p.h/2 + p.h*0.15; i < p.h/2; i += p.h*0.22) {
       ctx.beginPath();
@@ -1169,16 +1049,8 @@ class Game {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.025)';
-    ctx.lineWidth = 0.4;
-    for (let i = -p.w/2 + p.w*0.2; i < p.w/2; i += p.w*0.3) {
-      ctx.beginPath();
-      ctx.moveTo(p.cx + i, y+5);
-      ctx.quadraticCurveTo(p.cx + i + (Math.random()-0.5)*4, p.cy, p.cx + i, y+p.h-5);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    // 木节
+    ctx.fillStyle = 'rgba(0,0,0,'+(0.04*alpha)+')';
     ctx.beginPath();
     ctx.ellipse(p.cx + p.w*0.25, p.cy + p.h*0.15, 3, 2, 0.3, 0, Math.PI*2);
     ctx.fill();
@@ -1188,33 +1060,43 @@ class Game {
 
     ctx.restore();
 
+    // 螺丝孔标记
     for (const s of p.screws) {
       if (s.removed) continue;
-      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      ctx.fillStyle = 'rgba(0,0,0,'+(0.07*alpha)+')';
       ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillStyle = 'rgba(255,255,255,'+(0.05*alpha)+')';
       ctx.beginPath(); ctx.arc(s.x-0.5, s.y-1, 3.5, 0, Math.PI*2); ctx.fill();
     }
 
     ctx.restore();
   }
 
-  _drawScrew(ctx, x, y, col, hint, rot, scale) {
+  // blocked 参数：螺丝被上层面板遮挡时的渲染
+  _drawScrew(ctx, x, y, col, hint, rot, scale, blocked) {
     ctx.save();
     ctx.translate(x, y);
     if (scale && scale !== 1) ctx.scale(scale, scale);
     if (rot) ctx.rotate(-rot);
 
     const r = 12;
-    if (hint) {
+
+    if (blocked) {
+      // 被遮挡的螺丝 — 暗淡+锁标记
+      ctx.globalAlpha = 0.38;
+    }
+
+    if (hint && !blocked) {
       const pulse = Math.sin(Date.now()/150)*0.4+0.6;
       ctx.shadowColor = col.g;
       ctx.shadowBlur = 34 * pulse;
     }
 
+    // 阴影
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.arc(1.5, 2, r, 0, Math.PI*2); ctx.fill();
 
+    // 六角螺丝主体
     ctx.beginPath();
     for (let i=0;i<6;i++) {
       const a = Math.PI/6 + i*Math.PI/3;
@@ -1240,6 +1122,7 @@ class Game {
     ctx.lineWidth = 0.6;
     ctx.stroke();
 
+    // 中心圆
     ctx.beginPath(); ctx.arc(0, 0, r*0.62, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fill();
@@ -1247,6 +1130,7 @@ class Game {
     ctx.lineWidth = 0.5;
     ctx.stroke();
 
+    // 十字槽
     const slotW = 1.2, slotL = r * 0.5;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(-slotW, -slotL, slotW*2, slotL*2);
@@ -1255,6 +1139,7 @@ class Game {
     ctx.fillRect(-slotW, -slotL, 0.6, slotL*2);
     ctx.fillRect(-slotL, -slotW, slotL*2, 0.6);
 
+    // 高光
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.beginPath();
     ctx.ellipse(-r*0.25, -r*0.35, r*0.28, r*0.2, -0.5, 0, Math.PI*2);
@@ -1264,12 +1149,22 @@ class Game {
     ctx.ellipse(r*0.2, r*0.3, r*0.35, r*0.12, 0.3, 0, Math.PI*2);
     ctx.fill();
 
-    if (hint) {
+    if (blocked) {
+      // 锁标记 — 告诉玩家这颗螺丝拿不到
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(200,40,40,0.85)';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', 0, 0);
+    }
+
+    if (hint && !blocked) {
       const hp = Math.sin(Date.now()/180)*0.35+0.65;
-      ctx.strokeStyle = `rgba(255,215,0,${0.4*hp})`;
+      ctx.strokeStyle = 'rgba(255,215,0,'+(0.4*hp)+')';
       ctx.lineWidth = 5;
       ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${0.5+Math.sin(Date.now()/180)*0.3})`;
+      ctx.strokeStyle = 'rgba(255,255,255,'+(0.5+Math.sin(Date.now()/180)*0.3)+')';
       ctx.lineWidth = 3;
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = -Date.now()/60;
@@ -1299,9 +1194,11 @@ class Game {
       const elapsed = Date.now() - st.boxGlow;
       if (elapsed < 400) glowExtra = (1 - elapsed/400) * 16;
     }
+
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     rrect(ctx, bx-2, by-2, BW+4, BH+4, 9);
     ctx.fill();
+
     ctx.strokeStyle = st.activeBox.g;
     ctx.lineWidth = 2;
     ctx.shadowColor = st.activeBox.g;
@@ -1323,7 +1220,7 @@ class Game {
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei"';
-    ctx.fillText(`${st.activeCount}/${st.cap}`, bx+BW/2, by+BH/2+5);
+    ctx.fillText(st.activeCount + '/' + st.cap, bx+BW/2, by+BH/2+5);
 
     if (st.boxes.length > 0) {
       const nx = 254, ny = by;
@@ -1333,9 +1230,7 @@ class Game {
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.font = '9px "PingFang SC","Microsoft YaHei"';
       ctx.fillText('下一个', nx+13, ny-8);
-      if (st.boxes.length > 1) {
-        ctx.fillText(`+${st.boxes.length-1}`, nx+42, ny+BH/2+4);
-      }
+      if (st.boxes.length > 1) ctx.fillText('+' + (st.boxes.length-1), nx+42, ny+BH/2+4);
     }
   }
 
@@ -1364,7 +1259,7 @@ class Game {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '10px "PingFang SC","Microsoft YaHei"';
     ctx.textAlign = 'center';
-    ctx.fillText('临时存放', 210, ty-8);
+    ctx.fillText('临时存放 (' + st.temp.length + '/' + st.tempMax + ')', 210, ty-8);
   }
 
   _drawDecorGear(ctx, cx, cy, r, alpha) {
@@ -1373,16 +1268,13 @@ class Game {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 0.8;
-    const teeth = 8;
-    const ir = r * 0.55;
+    const teeth = 8, ir = r * 0.55;
     ctx.beginPath();
     for (let i = 0; i < teeth * 2; i++) {
       const a = i * Math.PI / teeth - Math.PI/2;
       const cr = i % 2 === 0 ? r : ir;
-      const px = cx + cr * Math.cos(a);
-      const py = cy + cr * Math.sin(a);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      const px = cx + cr * Math.cos(a), py = cy + cr * Math.sin(a);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath();
     ctx.stroke();
@@ -1404,15 +1296,13 @@ function rrect(ctx, x, y, w, h, r) {
 function lighten(hex, pct) {
   const n = parseInt(hex.replace('#',''),16);
   const a = Math.round(2.55*pct);
-  const R = Math.min(255,(n>>16)+a), G = Math.min(255,(n>>8&0xFF)+a), B = Math.min(255,(n&0xFF)+a);
-  return `rgb(${R},${G},${B})`;
+  return 'rgb('+Math.min(255,(n>>16)+a)+','+Math.min(255,(n>>8&0xFF)+a)+','+Math.min(255,(n&0xFF)+a)+')';
 }
 
 function sparks(x, y, color, n) {
   const a = [];
   for (let i=0;i<n;i++) {
-    const ang = Math.random()*Math.PI*2;
-    const spd = 1+Math.random()*3;
+    const ang = Math.random()*Math.PI*2, spd = 1+Math.random()*3;
     a.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,decay:.025+Math.random()*.04,size:1.5+Math.random()*2.5,color});
   }
   return a;
@@ -1421,8 +1311,7 @@ function sparks(x, y, color, n) {
 function burst(x, y, color, n) {
   const a = [];
   for (let i=0;i<n;i++) {
-    const ang = Math.random()*Math.PI*2;
-    const spd = 2+Math.random()*5;
+    const ang = Math.random()*Math.PI*2, spd = 2+Math.random()*5;
     a.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-1.5,life:1,decay:.018+Math.random()*.03,size:2+Math.random()*4,color});
   }
   return a;
@@ -1432,13 +1321,9 @@ function panelBurst(p) {
   const a = [];
   for (let i=0;i<18;i++) {
     a.push({
-      x: p.cx+(Math.random()-.5)*p.w,
-      y: p.cy+(Math.random()-.5)*p.h,
-      vx: (Math.random()-.5)*5,
-      vy: (Math.random()-.5)*5+2,
-      life: 1,
-      decay: .014+Math.random()*.025,
-      size: 2.5+Math.random()*4.5,
+      x: p.cx+(Math.random()-.5)*p.w, y: p.cy+(Math.random()-.5)*p.h,
+      vx: (Math.random()-.5)*5, vy: (Math.random()-.5)*5+2,
+      life: 1, decay: .014+Math.random()*.025, size: 2.5+Math.random()*4.5,
       color: p.wood ? p.wood.base : p.color,
     });
   }
