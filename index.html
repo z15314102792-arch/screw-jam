@@ -2,13 +2,57 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="x5-page-mode" content="app">
+<meta name="x5-fullscreen" content="true">
+<meta name="x5-orientation" content="portrait">
+<meta name="browsermode" content="application">
+<meta name="full-screen" content="yes">
+<meta name="360-fullscreen" content="true">
 <title>螺丝消除 - 解压小游戏</title>
+<script>
+// === 微信环境提前防护 ===
+(function(){
+  // 阻止微信下拉露出"网页由xxx提供"（全局 touchmove 拦截）
+  document.addEventListener('touchmove', function(e) {
+    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault();
+  }, { passive: false });
+  // 阻止微信长按弹出菜单
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  // 阻止微信双击缩放
+  document.addEventListener('dblclick', function(e) { e.preventDefault(); });
+  // 微信字体大小调整防护
+  if (typeof WeixinJSBridge !== 'undefined') {
+    try {
+      WeixinJSBridge.invoke('setFontSizeCallback', { fontSize: 0 });
+      WeixinJSBridge.on('menu:setfont', function() {
+        WeixinJSBridge.invoke('setFontSizeCallback', { fontSize: 0 });
+      });
+    } catch(e) {}
+  }
+  // 检测微信环境
+  var isWx = /micromessenger/i.test(navigator.userAgent);
+  if (isWx) console.log('[微信环境] 兼容防护已启用');
+  // 横竖屏切换时强制刷新布局
+  var resizeTimer;
+  window.addEventListener('orientationchange', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+      window.scrollTo(0, 0);
+      // 触发 Canvas resize
+      window.dispatchEvent(new Event('resize'));
+    }, 300);
+  });
+})();
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
-#gc{position:absolute;top:0;left:0;width:100%;height:100%}
-#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;min-height:-webkit-fill-available;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;-webkit-overflow-scrolling:touch;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;position:fixed;top:0;left:0;width:100%;height:100%}
+#gc{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;-webkit-touch-callout:none}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #ui>*{pointer-events:auto}
 #top{position:absolute;top:10px;left:0;width:100%;display:flex;justify-content:space-between;padding:0 14px}
 #lv{color:#fff;font-size:15px;font-weight:bold;background:rgba(0,0,0,0.45);padding:5px 14px;border-radius:20px;letter-spacing:1px}
@@ -77,20 +121,43 @@ class Audio {
     this.ctx = null;
     this.bgmNodes = [];
     this.bgmTimer = null;
+    this._unlocked = false;
     this._boot();
   }
   _boot() {
-    const fn = () => {
-      if (this.ctx) return;
-      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.45;
-      this.master.connect(this.ctx.destination);
-      this.bgmGain = this.ctx.createGain();
-      this.bgmGain.gain.value = 0.025;
-      this.bgmGain.connect(this.master);
+    // 微信 WeixinJSBridge 优先解锁（iOS 微信必须走这条路）
+    const doUnlock = () => {
+      if (this._unlocked) return;
+      this._unlocked = true;
+      try {
+        this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.45;
+        this.master.connect(this.ctx.destination);
+        this.bgmGain = this.ctx.createGain();
+        this.bgmGain.gain.value = 0.025;
+        this.bgmGain.connect(this.master);
+        console.log('AudioContext 已解锁');
+      } catch(e) { this.on = false; console.warn('AudioContext 创建失败:', e); }
     };
-    ['touchstart','mousedown','click'].forEach(e => document.addEventListener(e, fn, {once:true}));
+    // 路径1: WeixinJSBridge（微信专用，无需用户手势即可创建 AudioContext）
+    if (typeof WeixinJSBridge !== 'undefined') {
+      try { WeixinJSBridge.invoke('getNetworkType', {}, () => doUnlock()); } catch(e) {}
+    }
+    document.addEventListener('WeixinJSBridgeReady', () => {
+      try { WeixinJSBridge.invoke('getNetworkType', {}, () => doUnlock()); } catch(e) {}
+    }, {once:true});
+    // 路径2: 用户首次交互时解锁（兜底）
+    ['touchstart','mousedown','click'].forEach(evt => {
+      document.addEventListener(evt, () => {
+        if (!this._unlocked) doUnlock();
+      }, {once:true, passive:true});
+    });
+    // 路径3: 页面加载后延迟重试（处理奇怪时序）
+    setTimeout(() => {
+      if (!this._unlocked) doUnlock();
+    }, 1000);
   }
   t() { return this.ctx ? this.ctx.currentTime : 0 }
 
