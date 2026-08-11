@@ -380,6 +380,8 @@ class Game {
     this.hinted = null;
     this.busy = false;
     this.paused = false;
+    this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
+    this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
     hideAll();
     document.getElementById('lv').textContent = `第 ${lv} 关`;
     this.audio.bgm();
@@ -445,8 +447,6 @@ class Game {
   _remove(screw) {
     const st = this.st;
     this.busy = true;
-    this.audio.play('unscrew');
-    this.ps.push(...sparks(screw.x, screw.y, screw.color.f, 10));
 
     // 保存历史
     this.hist.push({
@@ -457,12 +457,44 @@ class Game {
       temp: st.temp.map(t => ({...t})),
     });
 
-    // 拧螺丝动画
+    // 确定飞行目标
+    const target = this._getTarget(screw);
+    screw.flyTarget = target;
+    screw.flyStart = null;
+
+    // 点击缩放反馈
+    screw.clickScale = 0.85;
+
+    // 拧螺丝动画（拧出→飞去目标）
     this._animUn(screw, () => {
-      screw.removed = true;
-      this.busy = false;
-      this._place(screw);
+      // 拧出完成，开始飞行
+      this.audio.play('unscrew');
+      this.ps.push(...sparks(screw.x, screw.y, screw.color.f, 8));
+
+      // 飞行起点 = 当前屏幕位置
+      screw.flyStart = { x: screw.x, y: screw.y - 35 };
+      screw.animPhase = 'flying';
+      this._animFly(screw, () => {
+        // 飞行完成
+        screw.removed = true;
+        screw.animPhase = 'done';
+        this.busy = false;
+        // 目标处粒子
+        this.ps.push(...sparks(target.x, target.y, screw.color.g, 12));
+        this._place(screw);
+      });
     });
+  }
+
+  _getTarget(screw) {
+    const st = this.st;
+    if (st.activeBox && st.activeBox.n === screw.color.n) {
+      return { x: 201, y: 82 }; // 收纳盒中心
+    }
+    // 临时区位置
+    const tx = (420 - st.tempMax * 44) / 2;
+    const slotIdx = Math.min(st.temp.length, st.tempMax - 1);
+    return { x: tx + slotIdx * 44 + 19, y: 540 };
   }
 
   _place(screw) {
@@ -470,8 +502,15 @@ class Game {
     const c = screw.color;
 
     if (st.activeBox && st.activeBox.n === c.n) {
+      // 连击计数
+      if (!st.combo) st.combo = 0;
+      st.combo++;
+      st.comboTime = Date.now();
+      if (st.combo >= 3) this.ps.push(...burst(210, 65, '#ffd700', 6));
+
       st.activeCount++;
       this.audio.play('boxIn');
+      st.boxGlow = Date.now(); // 盒子脉冲光
       this.ps.push(...sparks(screw.x, screw.y, c.g, 6));
       if (st.activeCount >= st.cap) {
         this.audio.play('boxFull');
@@ -481,6 +520,7 @@ class Game {
         this._autoMatch();
       }
     } else {
+      st.combo = 0; // 不匹配时连击中断
       if (st.temp.length >= st.tempMax) {
         this.audio.play('lose');
         setTimeout(() => document.getElementById('ovLose').classList.remove('hidden'), 400);
@@ -517,17 +557,27 @@ class Game {
 
   _checkPanels() {
     for (const p of this.st.panels) {
-      if (p.dropped) continue;
+      if (p.dropped || p.dropStart) continue;
       const remain = p.screws.filter(s => !s.removed).length;
       if (remain === 0) {
-        p.dropped = true;
+        // 面板掉落动画
+        p.dropStart = Date.now();
         this.audio.play('panelDrop');
         this.ps.push(...panelBurst(p));
+        this._shake(6, 300);
+        // 动画结束后标记掉落
+        setTimeout(() => { p.dropped = true; }, 400);
       } else if (remain === 1 && !p.wobble) {
         p.wobble = true;
         this.audio.play('panelWobble');
       }
     }
+  }
+
+  _shake(intensity, duration) {
+    this.shakeX = intensity;
+    this.shakeDur = duration;
+    this.shakeStart = Date.now();
   }
 
   _win() {
@@ -581,16 +631,51 @@ class Game {
 
   // ===== 动画 =====
   _animUn(screw, cb) {
-    const dur = 16;
+    const dur = 14; // 拧出帧数
     let f = 0;
     const sx = screw.x, sy = screw.y;
     const step = () => {
       f++;
+      screw.animPhase = 'unscrewing';
       screw.animT = f / dur;
       screw.animX = sx;
       screw.animY = sy - 35 * screw.animT;
       screw.animR = screw.animT * Math.PI * 2.5;
-      if (f >= dur) { screw.animT = 1; cb(); }
+      // 拧出粒子
+      if (f % 3 === 0) this.ps.push(...sparks(screw.animX, screw.animY, screw.color.f, 2));
+      // 点击缩放恢复
+      if (screw.clickScale && screw.clickScale < 1) screw.clickScale += 0.02;
+      if (f >= dur) { screw.animT = 1; screw.clickScale = 1; cb(); }
+      else requestAnimationFrame(step);
+    };
+    step();
+  }
+
+  _animFly(screw, cb) {
+    const dur = 18; // 飞行帧数
+    let f = 0;
+    const from = screw.flyStart;
+    const to = screw.flyTarget;
+    const step = () => {
+      f++;
+      const t = f / dur;
+      // 缓出曲线
+      const ease = 1 - Math.pow(1 - t, 3);
+      screw.flyX = from.x + (to.x - from.x) * ease;
+      // 弧线：先上拱再下落
+      const arc = Math.sin(t * Math.PI) * 60;
+      screw.flyY = from.y + (to.y - from.y) * ease - arc;
+      screw.flyScale = 1 - t * 0.4; // 飞行中缩小
+      screw.flyR = t * Math.PI * 1.5; // 持续旋转
+      // 拖尾粒子
+      if (f % 2 === 0) this.ps.push({
+        x: screw.flyX + (Math.random()-0.5)*6,
+        y: screw.flyY + (Math.random()-0.5)*6,
+        vx: (Math.random()-0.5)*1, vy: (Math.random()-0.5)*1,
+        life: 0.6, decay: 0.05, size: 1.5 + Math.random()*2,
+        color: screw.color.g,
+      });
+      if (f >= dur) { screw.flyX = to.x; screw.flyY = to.y; cb(); }
       else requestAnimationFrame(step);
     };
     step();
@@ -623,15 +708,41 @@ class Game {
 
     // 游戏区背景
     const GX=30, GY=130, GW=360, GH=340;
+
+    // 应用震屏
+    let shakeX = 0, shakeY = 0;
+    if (this.shakeStart) {
+      const elapsed = Date.now() - this.shakeStart;
+      if (elapsed < this.shakeDur) {
+        const decay = 1 - elapsed / this.shakeDur;
+        shakeX = (Math.random()-0.5) * this.shakeX * decay;
+        shakeY = (Math.random()-0.5) * this.shakeX * decay;
+      } else { this.shakeX = 0; }
+    }
+
+    // 背景装饰 — 柔和光晕
+    const bgGrad = ctx.createRadialGradient(210, 320, 30, 210, 320, 280);
+    bgGrad.addColorStop(0, 'rgba(100,150,200,0.06)');
+    bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(GX, GY, GW, GH);
+
+    // 装饰齿轮轮廓（半透明）
+    this._drawDecorGear(ctx, 55, 155, 22, 0.03);
+    this._drawDecorGear(ctx, 370, 310, 28, 0.025);
+    this._drawDecorGear(ctx, 355, 145, 18, 0.02);
+
     ctx.fillStyle = 'rgba(255,255,255,0.025)';
-    rrect(ctx, GX, GY, GW, GH, 16);
+    rrect(ctx, GX+shakeX, GY+shakeY, GW, GH, 16);
     ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
-    rrect(ctx, GX, GY, GW, GH, 16);
+    rrect(ctx, GX+shakeX, GY+shakeY, GW, GH, 16);
     ctx.stroke();
 
     // 面板 — 按 layer 升序（底层先画）
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
     const panels = [...st.panels].sort((a,b) => a.layer - b.layer);
     for (const p of panels) {
       if (p.dropped) continue;
@@ -640,19 +751,17 @@ class Game {
 
     // 螺丝
     for (const s of st.screws) {
-      if (s.removed) continue;
-      let sx = s.x, sy = s.y, rot = 0;
-      if (s.animT > 0 && s.animT < 1) {
-        sx = s.animX; sy = s.animY; rot = s.animR;
+      if (s.removed && s.animPhase !== 'flying') continue;
+      let sx = s.x, sy = s.y, rot = 0, sc = 1;
+      if (s.animPhase === 'unscrewing' && s.animT < 1) {
+        sx = s.animX; sy = s.animY; rot = s.animR; sc = s.clickScale || 1;
+      } else if (s.animPhase === 'flying') {
+        sx = s.flyX; sy = s.flyY; rot = s.flyR; sc = s.flyScale;
+      } else if (s.clickScale && s.clickScale < 1) {
+        sc = s.clickScale;
       }
-      this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot);
+      this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot, sc);
     }
-
-    // 顶部收纳区
-    this._drawBoxes(ctx, st);
-
-    // 临时存放区（底部）
-    this._drawTemp(ctx, st);
 
     // 粒子
     for (const p of this.ps) {
@@ -661,6 +770,22 @@ class Game {
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    ctx.restore(); // 结束震屏
+
+    // 顶部收纳区
+    this._drawBoxes(ctx, st);
+
+    // 临时存放区（底部）
+    this._drawTemp(ctx, st);
+
+    // 连击显示
+    if (st.combo && st.combo > 1) {
+      const alpha = Math.max(0, 1 - (Date.now() - st.comboTime) / 1200);
+      ctx.fillStyle = `rgba(255,215,0,${alpha})`;
+      ctx.font = 'bold 18px "PingFang SC","Microsoft YaHei"';
+      ctx.textAlign = 'center';
+      ctx.fillText(`🔥 连击 x${st.combo}`, 210, 310);
+    }
 
     ctx.restore();
 
@@ -672,92 +797,156 @@ class Game {
   }
 
   _drawPanel(ctx, p) {
-    if (p.wobble) ctx.save();
-    if (p.wobble) {
-      const wb = Math.sin(Date.now()/130) * 2.5;
-      ctx.translate(wb, 0);
+    const R = 16; // 统一圆角半径
+    const x = p.cx - p.w/2, y = p.cy - p.h/2;
+
+    // 面板掉落动画
+    let dropOffY = 0, dropAlpha = 1;
+    if (p.dropStart) {
+      const elapsed = (Date.now() - p.dropStart) / 1000;
+      dropOffY = elapsed * elapsed * 300; // 加速下落
+      dropAlpha = Math.max(0, 1 - elapsed * 2.5);
+      if (dropAlpha <= 0) return;
     }
 
-    // 阴影
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    rrect(ctx, p.cx-p.w/2+2, p.cy-p.h/2+2, p.w, p.h, 9);
+    if (p.wobble || p.dropStart) ctx.save();
+    if (p.wobble && !p.dropStart) {
+      const wb = Math.sin(Date.now()/130) * 2;
+      ctx.translate(wb, 0);
+    }
+    if (p.dropStart) {
+      ctx.globalAlpha = dropAlpha;
+      ctx.translate(0, dropOffY);
+    }
+
+    // 外层柔和阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    rrect(ctx, x+3, y+3, p.w, p.h, R);
+    ctx.fill();
+    // 内层紧凑阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    rrect(ctx, x+1, y+1, p.w, p.h, R);
     ctx.fill();
 
-    // 面板主体
-    const grad = ctx.createLinearGradient(p.cx-p.w/2, p.cy-p.h/2, p.cx+p.w/2, p.cy+p.h/2);
-    grad.addColorStop(0, p.color);
-    grad.addColorStop(0.45, lighten(p.color, 18));
-    grad.addColorStop(1, p.color);
+    // 面板主体 — 多层渐变
+    const grad = ctx.createLinearGradient(x, y, x+p.w, y+p.h);
+    grad.addColorStop(0, lighten(p.color, 8));
+    grad.addColorStop(0.3, lighten(p.color, 20));
+    grad.addColorStop(0.7, p.color);
+    grad.addColorStop(1, lighten(p.color, -5));
     ctx.fillStyle = grad;
-    rrect(ctx, p.cx-p.w/2, p.cy-p.h/2, p.w, p.h, 9);
+    rrect(ctx, x, y, p.w, p.h, R);
     ctx.fill();
 
-    // 边框
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 1.3;
-    rrect(ctx, p.cx-p.w/2, p.cy-p.h/2, p.w, p.h, 9);
+    // 顶部高光条
+    const hiGrad = ctx.createLinearGradient(x, y, x, y+p.h*0.5);
+    hiGrad.addColorStop(0, 'rgba(255,255,255,0.2)');
+    hiGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hiGrad;
+    rrect(ctx, x+4, y+2, p.w-8, p.h*0.4, R-4);
+    ctx.fill();
+
+    // 边框 — 柔和
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    rrect(ctx, x, y, p.w, p.h, R);
     ctx.stroke();
 
-    // 木纹
-    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-    ctx.lineWidth = 0.8;
-    for (let i=-p.h/2+14; i<p.h/2; i+=18) {
+    // 木纹 — 更稀疏柔和
+    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+    ctx.lineWidth = 0.7;
+    for (let i = -p.h/2 + p.h*0.2; i < p.h/2; i += p.h*0.25) {
       ctx.beginPath();
-      ctx.moveTo(p.cx-p.w/2+6, p.cy+i);
-      ctx.quadraticCurveTo(p.cx, p.cy+i+2, p.cx+p.w/2-6, p.cy+i);
+      ctx.moveTo(x+8, p.cy+i);
+      ctx.quadraticCurveTo(p.cx, p.cy+i+1, x+p.w-8, p.cy+i);
       ctx.stroke();
     }
 
-    if (p.wobble) ctx.restore();
+    if (p.wobble || p.dropStart) ctx.restore();
   }
 
-  _drawScrew(ctx, x, y, col, hint, rot) {
+  _drawScrew(ctx, x, y, col, hint, rot, scale) {
     ctx.save();
     ctx.translate(x, y);
+    if (scale && scale !== 1) ctx.scale(scale, scale);
     if (rot) ctx.rotate(-rot);
 
-    const r = 11;
+    const r = 12;
     if (hint) {
       const pulse = Math.sin(Date.now()/180)*0.35+0.65;
       ctx.shadowColor = col.g;
-      ctx.shadowBlur = 22 * pulse;
+      ctx.shadowBlur = 26 * pulse;
     }
 
-    // 六角形
+    // 底部阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.arc(1.5, 2, r, 0, Math.PI*2); ctx.fill();
+
+    // 圆角六角形 — 用弧线代替尖角
     ctx.beginPath();
     for (let i=0;i<6;i++) {
       const a = Math.PI/6 + i*Math.PI/3;
-      const px = r*Math.cos(a), py = r*Math.sin(a);
-      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+      const nx = r*Math.cos(a), ny = r*Math.sin(a);
+      const cr = r * 0.22; // 圆角半径
+      const a1 = a - Math.PI/6, a2 = a + Math.PI/6;
+      const sx = r*0.85*Math.cos(a1), sy = r*0.85*Math.sin(a1);
+      const ex = r*0.85*Math.cos(a2), ey = r*0.85*Math.sin(a2);
+      if (i===0) ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(nx, ny, ex, ey);
     }
     ctx.closePath();
 
-    const grad = ctx.createRadialGradient(-1.5,-2, r*0.08, 0,0, r*1.15);
-    grad.addColorStop(0, lighten(col.f, 45));
-    grad.addColorStop(0.35, col.f);
-    grad.addColorStop(1, col.d);
+    // 多层渐变模拟3D金属
+    const grad = ctx.createRadialGradient(-2,-2.5, r*0.05, 1,1, r*1.2);
+    grad.addColorStop(0, lighten(col.f, 55));
+    grad.addColorStop(0.2, lighten(col.f, 25));
+    grad.addColorStop(0.5, col.f);
+    grad.addColorStop(0.8, col.d);
+    grad.addColorStop(1, 'rgba(0,0,0,0.3)');
     ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 0.8;
+
+    // 细边框
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 0.6;
     ctx.stroke();
 
-    // 十字槽
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath(); ctx.moveTo(-4.5,0); ctx.lineTo(4.5,0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,-4.5); ctx.lineTo(0,4.5); ctx.stroke();
+    // 内圈暗环（螺丝凹槽）
+    ctx.beginPath(); ctx.arc(0, 0, r*0.62, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
 
-    // 高光
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath(); ctx.arc(-1.5,-2.5, 2.2, 0, Math.PI*2); ctx.fill();
+    // 十字槽 — 带渐变深度
+    const slotW = 1.2, slotL = r * 0.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(-slotW, -slotL, slotW*2, slotL*2);
+    ctx.fillRect(-slotL, -slotW, slotL*2, slotW*2);
+    // 槽内高光边
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(-slotW, -slotL, 0.6, slotL*2);
+    ctx.fillRect(-slotL, -slotW, slotL*2, 0.6);
+
+    // 顶部高光
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(-r*0.25, -r*0.35, r*0.28, r*0.2, -0.5, 0, Math.PI*2);
+    ctx.fill();
+
+    // 底部反光
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.ellipse(r*0.2, r*0.3, r*0.35, r*0.12, 0.3, 0, Math.PI*2);
+    ctx.fill();
 
     if (hint) {
       ctx.strokeStyle = `rgba(255,255,255,${0.5+Math.sin(Date.now()/200)*0.3})`;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.setLineDash([3, 3]);
       ctx.lineDashOffset = -Date.now()/80;
-      ctx.beginPath(); ctx.arc(0,0,r+5,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,r+6,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -781,13 +970,19 @@ class Game {
 
     // 当前盒子
     const bx = 175, by = Y+6;
+    // 脉冲光（螺丝刚进入时）
+    let glowExtra = 0;
+    if (st.boxGlow) {
+      const elapsed = Date.now() - st.boxGlow;
+      if (elapsed < 400) glowExtra = (1 - elapsed/400) * 16;
+    }
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     rrect(ctx, bx-2, by-2, BW+4, BH+4, 9);
     ctx.fill();
     ctx.strokeStyle = st.activeBox.g;
     ctx.lineWidth = 2;
     ctx.shadowColor = st.activeBox.g;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 8 + glowExtra;
     rrect(ctx, bx-2, by-2, BW+4, BH+4, 9);
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -850,6 +1045,29 @@ class Game {
     ctx.font = '10px "PingFang SC","Microsoft YaHei"';
     ctx.textAlign = 'center';
     ctx.fillText('临时存放', 210, ty-8);
+  }
+
+  _drawDecorGear(ctx, cx, cy, r, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 0.8;
+    const teeth = 8;
+    const ir = r * 0.55;
+    ctx.beginPath();
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = i * Math.PI / teeth - Math.PI/2;
+      const cr = i % 2 === 0 ? r : ir;
+      const px = cx + cr * Math.cos(a);
+      const py = cy + cr * Math.sin(a);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, ir * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 }
 
