@@ -1,0 +1,135 @@
+{
+  "project": "螺丝消除",
+  "version": "v3.2",
+  "timestamp": "2026-08-11T10:46:33.837Z",
+  "checks": [
+    {
+      "name": "入口文件存在",
+      "pass": true,
+      "data": {
+        "size_bytes": 55598,
+        "lines": 1218
+      }
+    },
+    {
+      "name": "JS 语法正确",
+      "pass": true,
+      "data": {}
+    },
+    {
+      "name": "代码加载（沙箱执行）",
+      "pass": true,
+      "data": {
+        "code_size": 49852
+      }
+    },
+    {
+      "name": "关卡可解性 (30关×3轮)",
+      "pass": true,
+      "data": {
+        "total_attempts": 90,
+        "solvable": 90,
+        "failed": 0,
+        "solvable_rate_pct": 100
+      }
+    },
+    {
+      "name": "螺丝遮盖率分布",
+      "pass": true,
+      "data": {
+        "samples": 30,
+        "min_pct": 11,
+        "p25_pct": 50,
+        "p50_pct": 56,
+        "p75_pct": 80,
+        "max_pct": 92,
+        "first_10": [
+          {
+            "level": 1,
+            "total": 6,
+            "blocked": 3,
+            "open": 3,
+            "coverage_pct": 50
+          },
+          {
+            "level": 2,
+            "total": 6,
+            "blocked": 3,
+            "open": 3,
+            "coverage_pct": 50
+          },
+          {
+            "level": 3,
+            "total": 9,
+            "blocked": 1,
+            "open": 8,
+            "coverage_pct": 11
+          },
+          {
+            "level": 4,
+            "total": 9,
+            "blocked": 5,
+            "open": 4,
+            "coverage_pct": 56
+          },
+          {
+            "level": 5,
+            "total": 9,
+            "blocked": 5,
+            "open": 4,
+            "coverage_pct": 56
+          },
+          {
+            "level": 6,
+            "total": 12,
+            "blocked": 6,
+            "open": 6,
+            "coverage_pct": 50
+          },
+          {
+            "level": 7,
+            "total": 12,
+            "blocked": 11,
+            "open": 1,
+            "coverage_pct": 92
+          },
+          {
+            "level": 8,
+            "total": 12,
+            "blocked": 6,
+            "open": 6,
+            "coverage_pct": 50
+          },
+          {
+            "level": 9,
+            "total": 12,
+            "blocked": 5,
+            "open": 7,
+            "coverage_pct": 42
+          },
+          {
+            "level": 10,
+            "total": 12,
+            "blocked": 6,
+            "open": 6,
+            "coverage_pct": 50
+          }
+        ]
+      }
+    },
+    {
+      "name": "开局可操作螺丝数",
+      "pass": true,
+      "data": {
+        "min": 1,
+        "p50": 6,
+        "max": 11
+      }
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0
+  }
+}

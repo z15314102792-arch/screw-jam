@@ -1,0 +1,7 @@
+{
+  "name": "螺丝消除-关卡验收",
+  "required_file": "verify-results.json",
+  "required_keys": ["project", "version", "checks", "summary"],
+  "min_size_bytes": 200,
+  "active": true
+}
