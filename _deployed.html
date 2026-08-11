@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v3.2</title>
+<title>螺丝消除 v3.1</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -921,8 +921,8 @@ class Game {
     this._drawDecorGear(ctx,370,310,28,0.025);
     this._drawDecorGear(ctx,355,145,18,0.02);
 
-    ctx.fillStyle='rgba(255,255,255,0.025)'; rrect(ctx,GX,GY,GW,GH,16); ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; rrect(ctx,GX,GY,GW,GH,16); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.025)'; rrect(ctx,GX+shakeX,GY+shakeY,GW,GH,16); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; rrect(ctx,GX+shakeX,GY+shakeY,GW,GH,16); ctx.stroke();
 
     const clipBottom=GY+GH;
     ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(GX,clipBottom); ctx.lineTo(GX+GW,clipBottom); ctx.stroke();

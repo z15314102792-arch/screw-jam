@@ -1,96 +1,4 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
-<meta name="format-detection" content="telephone=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
-<meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v3.2</title>
-<script>
-(function(){
-  document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
-  document.addEventListener('contextmenu',function(e){e.preventDefault();});
-  document.addEventListener('dblclick',function(e){e.preventDefault();});
-  if(typeof WeixinJSBridge!=='undefined'){try{WeixinJSBridge.invoke('setFontSizeCallback',{fontSize:0});WeixinJSBridge.on('menu:setfont',function(){WeixinJSBridge.invoke('setFontSizeCallback',{fontSize:0});});}catch(e){}}
-  var isWx=/micromessenger/i.test(navigator.userAgent);
-  window.addEventListener('orientationchange',function(){setTimeout(function(){window.scrollTo(0,0);window.dispatchEvent(new Event('resize'));},300);});
-})();
-</script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;min-height:-webkit-fill-available;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;position:fixed;top:0;left:0;width:100%;height:100%}
-#gc{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
-#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#ui>*{pointer-events:auto}
-#top{position:absolute;top:10px;left:0;width:100%;display:flex;justify-content:space-between;padding:0 14px}
-#lv{color:#fff;font-size:15px;font-weight:bold;background:rgba(0,0,0,0.45);padding:5px 14px;border-radius:20px;letter-spacing:1px}
-#top-right{display:flex;gap:6px}
-.icon-btn{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-#btns{position:absolute;bottom:22px;left:0;width:100%;display:flex;justify-content:center;gap:10px}
-.gbtn{padding:10px 22px;border-radius:22px;border:none;font-size:13px;font-weight:bold;cursor:pointer;transition:transform .15s;color:#fff;background:rgba(255,255,255,0.12);letter-spacing:0.5px}
-.gbtn:active{transform:scale(.95)}
-.gbtn.hint{background:rgba(255,200,0,0.2);color:#ffd700}
-.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.72);display:flex;justify-content:center;align-items:center;z-index:20}
-.overlay.hidden{display:none}
-.card{background:linear-gradient(155deg,#1a1a2e,#16213e);border-radius:22px;padding:32px 26px;text-align:center;color:#fff;max-width:320px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 64px rgba(0,0,0,0.55)}
-.card h2{font-size:22px;margin:6px 0}
-.card p{color:rgba(255,255,255,0.65);font-size:13px;margin:8px 0 18px;line-height:1.65}
-.card .emoji{font-size:52px;margin-bottom:8px}
-.rule-box{background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin:5px 0;text-align:left}
-.rule-box .r-icon{font-size:18px;margin-right:6px}
-.rule-box .r-text{color:rgba(255,255,255,0.75);font-size:12px;line-height:1.7}
-.rule-box .r-hl{color:#ffd700;font-weight:bold}
-.btn-big{display:inline-block;padding:13px 38px;border-radius:28px;border:none;font-size:15px;font-weight:bold;cursor:pointer;background:linear-gradient(135deg,#e94560,#f06292);color:#fff;transition:all .18s;letter-spacing:1px}
-.btn-big:active{transform:scale(.95);box-shadow:0 6px 24px rgba(233,69,96,0.45)}
-.btn-sub{display:inline-block;padding:9px 28px;border-radius:22px;border:1px solid rgba(255,255,255,0.28);font-size:13px;cursor:pointer;background:transparent;color:#fff;margin-top:10px}
-.stars{font-size:42px;margin:10px 0;letter-spacing:4px}
-</style>
-</head>
-<body>
-<canvas id="gc"></canvas>
-<div id="ui">
-  <div id="top">
-    <div id="lv">第 1 关</div>
-    <div id="top-right">
-      <button class="icon-btn" id="btnSound" onclick="G.sound()">🔊</button>
-      <button class="icon-btn" onclick="G.pause()">⏸</button>
-    </div>
-  </div>
-  <div id="btns">
-    <button class="gbtn" onclick="G.undo()">↩ 撤销</button>
-    <button class="gbtn" onclick="G.restart()">🔄 重来</button>
-    <button class="gbtn hint" onclick="G.hint()">💡 提示</button>
-  </div>
-  <div class="overlay" id="ovStart"><div class="card">
-    <div class="emoji">🔩</div><h2>螺丝消除</h2><p>解压 ASMR · 无限关卡</p>
-    <div class="rule-box">
-      <div class="r-text"><span class="r-icon">🔧</span>点击<strong>亮色螺丝</strong>拧下（暗色=被遮住）</div>
-      <div class="r-text"><span class="r-icon">⬆️</span>颜色匹配 → 飞入盒子</div>
-      <div class="r-text"><span class="r-icon">⬇️</span>不匹配 → 落入临时区</div>
-      <div class="r-text"><span class="r-icon">📦</span>盒子满自动换色 · 木板会<strong>倾斜</strong></div>
-      <div class="r-text"><span class="r-icon">⚠️</span>临时区满 → 失败！需要<strong>策略规划</strong></div>
-    </div>
-    <button class="btn-big" onclick="G.start(1)" style="margin-top:12px">开始游戏</button>
-  </div></div>
-  <div class="overlay hidden" id="ovWin"><div class="card">
-    <div class="stars" id="starsShow">⭐⭐⭐</div><h2>过关！</h2><p id="winMsg"></p>
-    <button class="btn-big" onclick="G.next()">下一关 ▶</button><br>
-    <button class="btn-sub" onclick="G.restart()">再玩一次</button>
-  </div></div>
-  <div class="overlay hidden" id="ovLose"><div class="card">
-    <div class="emoji">😵</div><h2>放不下了！</h2><p>临时存放区已满<br>换个顺序试试吧</p>
-    <button class="btn-big" onclick="G.restart()">再试一次 🔄</button>
-  </div></div>
-  <div class="overlay hidden" id="ovPause"><div class="card">
-    <div class="emoji">⏸</div><h2>暂停中</h2>
-    <button class="btn-big" onclick="G.resume()">继续游戏 ▶</button>
-  </div></div>
-</div>
 
-<script>
 // ==================== 音效引擎 ====================
 class Audio {
   constructor() {
@@ -921,8 +829,8 @@ class Game {
     this._drawDecorGear(ctx,370,310,28,0.025);
     this._drawDecorGear(ctx,355,145,18,0.02);
 
-    ctx.fillStyle='rgba(255,255,255,0.025)'; rrect(ctx,GX,GY,GW,GH,16); ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; rrect(ctx,GX,GY,GW,GH,16); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.025)'; rrect(ctx,GX+shakeX,GY+shakeY,GW,GH,16); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; rrect(ctx,GX+shakeX,GY+shakeY,GW,GH,16); ctx.stroke();
 
     const clipBottom=GY+GH;
     ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(GX,clipBottom); ctx.lineTo(GX+GW,clipBottom); ctx.stroke();
@@ -1212,6 +1120,3 @@ function panelBurst(p){const a=[];for(let i=0;i<18;i++){a.push({x:p.cx+(Math.ran
 function hideAll(){['ovStart','ovWin','ovLose','ovPause'].forEach(id=>document.getElementById(id).classList.add('hidden'));}
 
 const G = new Game();
-</script>
-</body>
-</html>
