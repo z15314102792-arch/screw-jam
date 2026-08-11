@@ -1,6 +1,6 @@
 # 螺丝消除 · 解压小游戏
 
-> v1.0 | 2026-08-11
+> v1.3 | 2026-08-11
 
 ## 项目简介
 
@@ -12,7 +12,7 @@
 - **前端**: 原生 HTML/CSS/JS，单文件 `index.html`
 - **渲染**: Canvas 2D（六角螺丝、面板、粒子）
 - **音效**: Web Audio API（全合成，无音频文件）
-- **部署**: GitHub Pages（`/docs` 或根目录）
+- **部署**: GitHub Pages（根目录）
 
 ## 部署方式
 
@@ -39,18 +39,45 @@ index.html
 
 ## 版本历史
 
+### v1.3 (2026-08-11)
+- **修复9个问题**：
+  1. 移除木板掉落时的屏幕震动
+  2. 修复空白木板bug（每块木板至少1颗螺丝）
+  3. 木板支点旋转下落（替代滑动）
+  4. 重来按钮现在重玩同一关（保存种子）
+  5. 提示光环更大更明显（双层：金色+虚线）
+  6. 主界面默认显示，不再直接进入关卡
+  7. 主界面新增详细游戏规则说明
+  8. 撤销时恢复面板状态（掉落、摇晃）
+  9. 面板下落用蒙版裁剪替代渐隐
+
+### v1.2 (2026-08-11)
+- 动画全面升级 — 螺丝飞行弧线+圆角3D螺丝+面板圆角16px+震屏+连击+拖尾粒子
+
+### v1.1 (2026-08-11)
+- 微信浏览器全兼容 — WeixinJSBridge 音频解锁、X5 meta、全局触摸防护、安全区适配
+
 ### v1.0 (2026-08-11)
-- 初版：核心玩法、关卡生成、6色体系
-- 音效：4种游戏音效 + 3种事件音效 + BGM
-- 特效：螺丝拧出动效、面板掉落粒子、过关烟花
-- 功能：撤销、提示、暂停、音效开关
+- 初版上线，6色体系，关卡生成器，音效特效完备
+
+## 微信兼容（v1.1）
+
+| 项目 | 方案 |
+|------|------|
+| 音频解锁 | WeixinJSBridge + touchstart 双重保险 |
+| X5 浏览器 | x5-orientation/fullscreen/page-mode meta |
+| 下拉刷新 | 全局 touchmove capture + CSS overflow:hidden |
+| 长按菜单 | contextmenu preventDefault |
+| 双击缩放 | dblclick preventDefault + maximum-scale=1.0 |
+| 字体调整 | setFontSizeCallback 锁定 |
+| 安全区 | viewport-fit=cover + env(safe-area-inset-*) |
+| 横竖屏 | orientationchange 监听 + resize 触发 |
+| 点击高亮 | -webkit-tap-highlight-color:transparent |
+| 文本渲染 | -webkit-font-smoothing:antialiased |
 
 ## 待办
 
-- [ ] 螺丝刀/手指动画
-- [ ] 更多面板形状（圆形、L形板子）
-- [ ] 关卡选择界面
-- [ ] 炸弹螺丝（限时螺丝）
-- [ ] 冰冻螺丝（需要先解冻）
-- [ ] 连击加分系统
-- [ ] 排行榜/存档
+- 炸弹螺丝（限时螺丝）
+- 冰冻螺丝（需解冻）
+- 更多面板形状
+- 连击加分系统

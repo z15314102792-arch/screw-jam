@@ -12,7 +12,7 @@
 <meta name="browsermode" content="application">
 <meta name="full-screen" content="yes">
 <meta name="360-fullscreen" content="true">
-<title>螺丝消除 - 解压小游戏</title>
+<title>螺丝消除 - 解压小游戏 v1.3</title>
 <script>
 // === 微信环境提前防护 ===
 (function(){
@@ -42,7 +42,6 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function() {
       window.scrollTo(0, 0);
-      // 触发 Canvas resize
       window.dispatchEvent(new Event('resize'));
     }, 300);
   });
@@ -64,10 +63,14 @@ body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;m
 .gbtn.hint{background:rgba(255,200,0,0.2);color:#ffd700}
 .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.72);display:flex;justify-content:center;align-items:center;z-index:20}
 .overlay.hidden{display:none}
-.card{background:linear-gradient(155deg,#1a1a2e,#16213e);border-radius:22px;padding:32px 26px;text-align:center;color:#fff;max-width:300px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 64px rgba(0,0,0,0.55)}
+.card{background:linear-gradient(155deg,#1a1a2e,#16213e);border-radius:22px;padding:32px 26px;text-align:center;color:#fff;max-width:320px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 64px rgba(0,0,0,0.55)}
 .card h2{font-size:22px;margin:6px 0}
 .card p{color:rgba(255,255,255,0.65);font-size:13px;margin:8px 0 18px;line-height:1.65}
 .card .emoji{font-size:52px;margin-bottom:8px}
+.rule-box{background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin:5px 0;text-align:left}
+.rule-box .r-icon{font-size:18px;margin-right:6px}
+.rule-box .r-text{color:rgba(255,255,255,0.75);font-size:12px;line-height:1.7}
+.rule-box .r-hl{color:#ffd700;font-weight:bold}
 .btn-big{display:inline-block;padding:13px 38px;border-radius:28px;border:none;font-size:15px;font-weight:bold;cursor:pointer;background:linear-gradient(135deg,#e94560,#f06292);color:#fff;transition:all .18s;letter-spacing:1px}
 .btn-big:active{transform:scale(.95);box-shadow:0 6px 24px rgba(233,69,96,0.45)}
 .btn-sub{display:inline-block;padding:9px 28px;border-radius:22px;border:1px solid rgba(255,255,255,0.28);font-size:13px;cursor:pointer;background:transparent;color:#fff;margin-top:10px}
@@ -90,10 +93,19 @@ body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;m
     <button class="gbtn hint" onclick="G.hint()">💡 提示</button>
   </div>
 
+  <!-- 主界面 — 游戏说明 -->
   <div class="overlay" id="ovStart"><div class="card">
     <div class="emoji">🔩</div><h2>螺丝消除</h2>
-    <p>拧下彩色螺丝<br>放入同色收纳盒 · 清空面板过关<br>🎵 建议打开声音体验 ASMR 解压</p>
-    <button class="btn-big" onclick="G.start(1)">开始游戏</button>
+    <p>解压 ASMR · 无限关卡</p>
+    <div class="rule-box">
+      <div class="r-text"><span class="r-icon">🔧</span>点击螺丝<strong>拧下</strong>，进入动画</div>
+      <div class="r-text"><span class="r-icon">⬆️</span>颜色匹配当前收纳盒 → 螺丝<span class="r-hl">飞入盒子</span>（向上飞）</div>
+      <div class="r-text"><span class="r-icon">⬇️</span>颜色不匹配 → 螺丝<span class="r-hl">落入底部临时区</span></div>
+      <div class="r-text"><span class="r-icon">📦</span>当前盒子装满后，自动换下一个颜色</div>
+      <div class="r-text"><span class="r-icon">🪵</span>木板螺丝全部拧下 → 木板<span class="r-hl">物理掉落</span></div>
+      <div class="r-text"><span class="r-icon">⚠️</span>临时区满了就输了！善用撤销和提示</div>
+    </div>
+    <button class="btn-big" onclick="G.start(1)" style="margin-top:12px">开始游戏</button>
   </div></div>
 
   <div class="overlay hidden" id="ovWin"><div class="card">
@@ -125,7 +137,6 @@ class Audio {
     this._boot();
   }
   _boot() {
-    // 微信 WeixinJSBridge 优先解锁（iOS 微信必须走这条路）
     const doUnlock = () => {
       if (this._unlocked) return;
       this._unlocked = true;
@@ -141,20 +152,17 @@ class Audio {
         console.log('AudioContext 已解锁');
       } catch(e) { this.on = false; console.warn('AudioContext 创建失败:', e); }
     };
-    // 路径1: WeixinJSBridge（微信专用，无需用户手势即可创建 AudioContext）
     if (typeof WeixinJSBridge !== 'undefined') {
       try { WeixinJSBridge.invoke('getNetworkType', {}, () => doUnlock()); } catch(e) {}
     }
     document.addEventListener('WeixinJSBridgeReady', () => {
       try { WeixinJSBridge.invoke('getNetworkType', {}, () => doUnlock()); } catch(e) {}
     }, {once:true});
-    // 路径2: 用户首次交互时解锁（兜底）
     ['touchstart','mousedown','click'].forEach(evt => {
       document.addEventListener(evt, () => {
         if (!this._unlocked) doUnlock();
       }, {once:true, passive:true});
     });
-    // 路径3: 页面加载后延迟重试（处理奇怪时序）
     setTimeout(() => {
       if (!this._unlocked) doUnlock();
     }, 1000);
@@ -165,7 +173,6 @@ class Audio {
     if (!this.on || !this.ctx) return;
     const t = this.t();
     const m = this.master;
-    // 噪声辅助函数
     const noise = (dur, fLo, fHi, q, vol) => {
       const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
       const d = buf.getChannelData(0);
@@ -187,8 +194,8 @@ class Audio {
 
     switch(k) {
       case 'unscrew':
-        noise(0.1, 2500, 4500, 5, 0.07); // 金属摩擦
-        for(let i=0;i<3;i++) tone(2200+i*150, 0.03, 0.05, 'sine'); // 滴答
+        noise(0.1, 2500, 4500, 5, 0.07);
+        for(let i=0;i<3;i++) tone(2200+i*150, 0.03, 0.05, 'sine');
         break;
       case 'boxIn':
         tone(750, 0.07, 0.09, 'triangle', 380);
@@ -258,20 +265,17 @@ const COLS = [
 
 function genLevel(lv) {
   const numCol = Math.min(2 + Math.floor((lv-1)/3), 6);
-  const cap = numCol === 2 ? 4 : 3; // 2色时每盒4个，否则3个
+  const cap = numCol === 2 ? 4 : 3;
   const total = numCol * cap;
   const numPanel = Math.min(3 + Math.floor(lv/2), 10);
   const colors = COLS.slice(0, numCol);
 
-  // 生成颜色分布
   const screwCols = [];
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
-  // 面板区域: 画布 420×700，游戏区 xywh
   const GX=30, GY=130, GW=360, GH=340;
 
-  // 生成面板 — 随机位置，有重叠
   const panels = [];
   for (let i = 0; i < numPanel; i++) {
     const pw = 70 + Math.random() * 80;
@@ -280,54 +284,38 @@ function genLevel(lv) {
     const cy = GY + 30 + Math.random() * (GH - 80);
     panels.push({ id:i, cx, cy, w:pw, h:ph, screws:[], dropped:false, wobble:false,
       color:['#e8d5b7','#d4c0a0','#c9b99a','#bfaa88','#dcc8a8'][i%5],
-      layer: i // 编号越大越上层
+      layer: i
     });
   }
 
-  // 按 layer 排序后分配层级（后创建的在上层）
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
-  // 分配螺丝
+  // 分配螺丝 — 每块木板至少1颗
   let si = 0;
+  // 第一轮：每块先分1颗保证不空
   panels.forEach(p => {
-    const need = Math.min(2 + Math.floor(si / total * 2), total - si);
-    if (need <= 0) return;
-    for (let i = 0; i < need && si < total; i++) {
-      const offX = (i%2===0?-1:1) * p.w * 0.28;
-      const offY = (i<2?-1:1) * p.h * 0.22;
-      p.screws.push({
-        id: si,
-        color: screwCols[si],
-        x: p.cx + offX,
-        y: p.cy + offY,
-        panelId: p.id,
-        removed: false,
-        animT: 0,
-      });
-      si++;
-    }
+    p.screws.push({
+      id: si, color: screwCols[si],
+      x: p.cx, y: p.cy, panelId: p.id, removed: false, animT: 0,
+    });
+    si++;
   });
-
-  // 剩余螺丝挂在随机面板上
+  // 第二轮：剩余螺丝随机分配到各木板
   while (si < total) {
     const p = panels[Math.floor(Math.random() * panels.length)];
     const cnt = p.screws.length;
+    const offX = (cnt%2===0?-1:1) * p.w * 0.28;
+    const offY = (cnt<2?-1:1) * p.h * 0.22;
     p.screws.push({
-      id: si,
-      color: screwCols[si],
-      x: p.cx + (cnt%2===0?-1:1)*p.w*0.15,
-      y: p.cy + (cnt<2?p.h*0.18:-p.h*0.15),
-      panelId: p.id,
-      removed: false,
-      animT: 0,
+      id: si, color: screwCols[si],
+      x: p.cx + offX, y: p.cy + offY, panelId: p.id, removed: false, animT: 0,
     });
     si++;
   }
 
   const allScrews = panels.flatMap(p => p.screws);
 
-  // 收纳盒队列
   const boxes = [];
   colors.forEach(c => { boxes.push(c); });
   shuffle(boxes);
@@ -352,8 +340,9 @@ class Game {
     this.ctx = this.cvs.getContext('2d');
     this.audio = new Audio();
     this.st = null;
-    this.ps = [];   // particles
-    this.hist = []; // undo history
+    this._seed = null; // 用于重来同关
+    this.ps = [];
+    this.hist = [];
     this.hinted = null;
     this.paused = false;
     this.busy = false;
@@ -369,12 +358,17 @@ class Game {
     this.W = r.width; this.H = r.height;
     this.cvs.width = r.width * (devicePixelRatio||1);
     this.cvs.height = r.height * (devicePixelRatio||1);
-    this.S = this.cvs.width / r.width; // 缩放比
+    this.S = this.cvs.width / r.width;
   }
 
   // ===== 关卡 =====
+  _deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
   start(lv) {
     this.st = genLevel(lv);
+    this._seed = this._deepClone(this.st); // 保存关卡种子，重来同关
     this.ps = [];
     this.hist = [];
     this.hinted = null;
@@ -388,11 +382,27 @@ class Game {
   }
 
   next() {
+    this._seed = null;
     this.start(this.st.level + 1);
   }
 
   restart() {
-    this.start(this.st.level);
+    if (this._seed) {
+      // 用保存的种子重建同关
+      this.st = this._deepClone(this._seed);
+      this.ps = [];
+      this.hist = [];
+      this.hinted = null;
+      this.busy = false;
+      this.paused = false;
+      this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
+      this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
+      hideAll();
+      document.getElementById('lv').textContent = `第 ${this.st.level} 关`;
+      this.audio.bgm();
+    } else {
+      this.start(this.st.level);
+    }
   }
 
   pause() {
@@ -431,7 +441,6 @@ class Game {
   }
 
   _blocked(panel) {
-    // 面板被上层未掉落面板遮挡
     for (const p of this.st.panels) {
       if (p.id === panel.id || p.dropped) continue;
       if (p.layer > panel.layer && this._overlap(p, panel)) return true;
@@ -448,38 +457,34 @@ class Game {
     const st = this.st;
     this.busy = true;
 
-    // 保存历史
+    // 保存历史（含面板状态）
     this.hist.push({
       sid: screw.id,
       box: st.activeBox ? {...st.activeBox} : null,
       cnt: st.activeCount,
       queue: [...st.boxes],
       temp: st.temp.map(t => ({...t})),
+      panels: st.panels.map(p => ({
+        id: p.id, dropped: p.dropped, wobble: p.wobble, dropStart: p.dropStart,
+        dropOffY: p.dropOffY, dropAngle: p.dropAngle,
+      })),
     });
 
-    // 确定飞行目标
     const target = this._getTarget(screw);
     screw.flyTarget = target;
     screw.flyStart = null;
-
-    // 点击缩放反馈
     screw.clickScale = 0.85;
 
-    // 拧螺丝动画（拧出→飞去目标）
     this._animUn(screw, () => {
-      // 拧出完成，开始飞行
       this.audio.play('unscrew');
       this.ps.push(...sparks(screw.x, screw.y, screw.color.f, 8));
 
-      // 飞行起点 = 当前屏幕位置
       screw.flyStart = { x: screw.x, y: screw.y - 35 };
       screw.animPhase = 'flying';
       this._animFly(screw, () => {
-        // 飞行完成
         screw.removed = true;
         screw.animPhase = 'done';
         this.busy = false;
-        // 目标处粒子
         this.ps.push(...sparks(target.x, target.y, screw.color.g, 12));
         this._place(screw);
       });
@@ -489,9 +494,8 @@ class Game {
   _getTarget(screw) {
     const st = this.st;
     if (st.activeBox && st.activeBox.n === screw.color.n) {
-      return { x: 201, y: 82 }; // 收纳盒中心
+      return { x: 201, y: 82 };
     }
-    // 临时区位置
     const tx = (420 - st.tempMax * 44) / 2;
     const slotIdx = Math.min(st.temp.length, st.tempMax - 1);
     return { x: tx + slotIdx * 44 + 19, y: 540 };
@@ -502,7 +506,6 @@ class Game {
     const c = screw.color;
 
     if (st.activeBox && st.activeBox.n === c.n) {
-      // 连击计数
       if (!st.combo) st.combo = 0;
       st.combo++;
       st.comboTime = Date.now();
@@ -510,7 +513,7 @@ class Game {
 
       st.activeCount++;
       this.audio.play('boxIn');
-      st.boxGlow = Date.now(); // 盒子脉冲光
+      st.boxGlow = Date.now();
       this.ps.push(...sparks(screw.x, screw.y, c.g, 6));
       if (st.activeCount >= st.cap) {
         this.audio.play('boxFull');
@@ -520,7 +523,7 @@ class Game {
         this._autoMatch();
       }
     } else {
-      st.combo = 0; // 不匹配时连击中断
+      st.combo = 0;
       if (st.temp.length >= st.tempMax) {
         this.audio.play('lose');
         setTimeout(() => document.getElementById('ovLose').classList.remove('hidden'), 400);
@@ -560,24 +563,21 @@ class Game {
       if (p.dropped || p.dropStart) continue;
       const remain = p.screws.filter(s => !s.removed).length;
       if (remain === 0) {
-        // 面板掉落动画
+        // 面板下落：支点旋转 + 蒙版裁剪
         p.dropStart = Date.now();
+        p.dropAngle = 0; // 初始旋转角度
+        p.dropOffY = 0;  // 初始位移
+        p.dropPivotX = p.cx; // 旋转支点（面板中心）
+        p.dropPivotY = p.cy;
         this.audio.play('panelDrop');
         this.ps.push(...panelBurst(p));
-        this._shake(6, 300);
         // 动画结束后标记掉落
-        setTimeout(() => { p.dropped = true; }, 400);
+        setTimeout(() => { p.dropped = true; }, 600);
       } else if (remain === 1 && !p.wobble) {
         p.wobble = true;
         this.audio.play('panelWobble');
       }
     }
-  }
-
-  _shake(intensity, duration) {
-    this.shakeX = intensity;
-    this.shakeDur = duration;
-    this.shakeStart = Date.now();
   }
 
   _win() {
@@ -590,7 +590,6 @@ class Game {
     document.getElementById('starsShow').textContent = '⭐'.repeat(stars)+'☆'.repeat(3-stars);
     document.getElementById('winMsg').textContent = `第 ${st.level} 关完成！撤销 ${undos} 次`;
     document.getElementById('ovWin').classList.remove('hidden');
-    // 胜利烟花
     for (let i=0;i<40;i++) {
       setTimeout(() => {
         this.ps.push(...burst(60+Math.random()*300, 100+Math.random()*400, COLS[Math.floor(Math.random()*6)].g, 8));
@@ -604,10 +603,27 @@ class Game {
     const s = this.st.screws.find(s => s.id === rec.sid);
     if (!s) return;
     s.removed = false;
+    s.animPhase = null;
+    s.flyStart = null;
+    s.flyTarget = null;
+    s.clickScale = 1;
     this.st.activeBox = rec.box;
     this.st.activeCount = rec.cnt;
     this.st.boxes = rec.queue;
     this.st.temp = rec.temp;
+    // 恢复面板状态
+    if (rec.panels) {
+      for (const ps of rec.panels) {
+        const p = this.st.panels.find(p => p.id === ps.id);
+        if (p) {
+          p.dropped = ps.dropped;
+          p.wobble = ps.wobble;
+          p.dropStart = ps.dropStart;
+          p.dropOffY = ps.dropOffY;
+          p.dropAngle = ps.dropAngle;
+        }
+      }
+    }
     this.audio.play('click');
   }
 
@@ -625,13 +641,13 @@ class Game {
     if (best) {
       this.hinted = best;
       this.audio.play('hint');
-      setTimeout(() => { this.hinted = null; }, 1800);
+      setTimeout(() => { this.hinted = null; }, 2000);
     }
   }
 
   // ===== 动画 =====
   _animUn(screw, cb) {
-    const dur = 14; // 拧出帧数
+    const dur = 14;
     let f = 0;
     const sx = screw.x, sy = screw.y;
     const step = () => {
@@ -641,9 +657,7 @@ class Game {
       screw.animX = sx;
       screw.animY = sy - 35 * screw.animT;
       screw.animR = screw.animT * Math.PI * 2.5;
-      // 拧出粒子
       if (f % 3 === 0) this.ps.push(...sparks(screw.animX, screw.animY, screw.color.f, 2));
-      // 点击缩放恢复
       if (screw.clickScale && screw.clickScale < 1) screw.clickScale += 0.02;
       if (f >= dur) { screw.animT = 1; screw.clickScale = 1; cb(); }
       else requestAnimationFrame(step);
@@ -652,22 +666,19 @@ class Game {
   }
 
   _animFly(screw, cb) {
-    const dur = 18; // 飞行帧数
+    const dur = 18;
     let f = 0;
     const from = screw.flyStart;
     const to = screw.flyTarget;
     const step = () => {
       f++;
       const t = f / dur;
-      // 缓出曲线
       const ease = 1 - Math.pow(1 - t, 3);
       screw.flyX = from.x + (to.x - from.x) * ease;
-      // 弧线：先上拱再下落
       const arc = Math.sin(t * Math.PI) * 60;
       screw.flyY = from.y + (to.y - from.y) * ease - arc;
-      screw.flyScale = 1 - t * 0.4; // 飞行中缩小
-      screw.flyR = t * Math.PI * 1.5; // 持续旋转
-      // 拖尾粒子
+      screw.flyScale = 1 - t * 0.4;
+      screw.flyR = t * Math.PI * 1.5;
       if (f % 2 === 0) this.ps.push({
         x: screw.flyX + (Math.random()-0.5)*6,
         y: screw.flyY + (Math.random()-0.5)*6,
@@ -706,10 +717,11 @@ class Game {
     const st = this.st;
     if (!st) { ctx.restore(); return; }
 
-    // 游戏区背景
+    // 游戏区参数
     const GX=30, GY=130, GW=360, GH=340;
+    const clipBottom = GY + GH; // 蒙版裁剪线（游戏区底部 = 470）
 
-    // 应用震屏
+    // 应用震屏（虽然面板掉落不再震，但保留框架以备将来使用）
     let shakeX = 0, shakeY = 0;
     if (this.shakeStart) {
       const elapsed = Date.now() - this.shakeStart;
@@ -740,16 +752,32 @@ class Game {
     rrect(ctx, GX+shakeX, GY+shakeY, GW, GH, 16);
     ctx.stroke();
 
+    // 游戏区底部裁剪线（蒙版线 — 面板落到此线以下消失）
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(GX, clipBottom);
+    ctx.lineTo(GX+GW, clipBottom);
+    ctx.stroke();
+
     // 面板 — 按 layer 升序（底层先画）
     ctx.save();
     ctx.translate(shakeX, shakeY);
+
+    // 对面板渲染应用底部裁剪（蒙版效果）
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(GX-20, GY-20, GW+40, GH+40);
+    ctx.clip();
+
     const panels = [...st.panels].sort((a,b) => a.layer - b.layer);
     for (const p of panels) {
       if (p.dropped) continue;
-      this._drawPanel(ctx, p);
+      this._drawPanel(ctx, p, clipBottom);
     }
+    ctx.restore(); // 结束裁剪
 
-    // 螺丝
+    // 螺丝（在裁剪区外绘制，确保飞行螺丝可见）
     for (const s of st.screws) {
       if (s.removed && s.animPhase !== 'flying') continue;
       let sx = s.x, sy = s.y, rot = 0, sc = 1;
@@ -796,27 +824,41 @@ class Game {
     });
   }
 
-  _drawPanel(ctx, p) {
-    const R = 16; // 统一圆角半径
+  _drawPanel(ctx, p, clipBottom) {
+    const R = 16;
     const x = p.cx - p.w/2, y = p.cy - p.h/2;
 
-    // 面板掉落动画
-    let dropOffY = 0, dropAlpha = 1;
+    // 面板下落动画：支点旋转 + 蒙版裁剪
+    let dropOffY = 0, dropAngle = 0;
     if (p.dropStart) {
       const elapsed = (Date.now() - p.dropStart) / 1000;
-      dropOffY = elapsed * elapsed * 300; // 加速下落
-      dropAlpha = Math.max(0, 1 - elapsed * 2.5);
-      if (dropAlpha <= 0) return;
+      // 加速下落（物理重力感）
+      dropOffY = elapsed * elapsed * 280;
+      // 支点旋转（绕面板中心轻微旋转，模拟失去支撑后偏转）
+      dropAngle = Math.sin(elapsed * 3) * 0.3 * Math.min(elapsed * 2, 1);
+      // 更新到面板属性供撤销恢复
+      p.dropOffY = dropOffY;
+      p.dropAngle = dropAngle;
+      // 如果面板完全落到游戏区底部以下，不再绘制
+      if (p.cy + dropOffY - p.h/2 > clipBottom + 40) return;
     }
 
-    if (p.wobble || p.dropStart) ctx.save();
+    ctx.save();
+
     if (p.wobble && !p.dropStart) {
       const wb = Math.sin(Date.now()/130) * 2;
       ctx.translate(wb, 0);
     }
+
     if (p.dropStart) {
-      ctx.globalAlpha = dropAlpha;
+      // 平移到面板位置
+      ctx.translate(p.cx, p.cy);
+      // 旋转
+      if (dropAngle) ctx.rotate(dropAngle);
+      // 下落位移
       ctx.translate(0, dropOffY);
+      // 回到原点（相对于面板左上角绘制）
+      ctx.translate(-p.cx, -p.cy);
     }
 
     // 外层柔和阴影
@@ -852,7 +894,7 @@ class Game {
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.stroke();
 
-    // 木纹 — 更稀疏柔和
+    // 木纹
     ctx.strokeStyle = 'rgba(0,0,0,0.04)';
     ctx.lineWidth = 0.7;
     for (let i = -p.h/2 + p.h*0.2; i < p.h/2; i += p.h*0.25) {
@@ -862,7 +904,7 @@ class Game {
       ctx.stroke();
     }
 
-    if (p.wobble || p.dropStart) ctx.restore();
+    ctx.restore();
   }
 
   _drawScrew(ctx, x, y, col, hint, rot, scale) {
@@ -873,21 +915,20 @@ class Game {
 
     const r = 12;
     if (hint) {
-      const pulse = Math.sin(Date.now()/180)*0.35+0.65;
+      const pulse = Math.sin(Date.now()/150)*0.4+0.6;
       ctx.shadowColor = col.g;
-      ctx.shadowBlur = 26 * pulse;
+      ctx.shadowBlur = 34 * pulse;
     }
 
     // 底部阴影
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.arc(1.5, 2, r, 0, Math.PI*2); ctx.fill();
 
-    // 圆角六角形 — 用弧线代替尖角
+    // 圆角六角形
     ctx.beginPath();
     for (let i=0;i<6;i++) {
       const a = Math.PI/6 + i*Math.PI/3;
       const nx = r*Math.cos(a), ny = r*Math.sin(a);
-      const cr = r * 0.22; // 圆角半径
       const a1 = a - Math.PI/6, a2 = a + Math.PI/6;
       const sx = r*0.85*Math.cos(a1), sy = r*0.85*Math.sin(a1);
       const ex = r*0.85*Math.cos(a2), ey = r*0.85*Math.sin(a2);
@@ -911,7 +952,7 @@ class Game {
     ctx.lineWidth = 0.6;
     ctx.stroke();
 
-    // 内圈暗环（螺丝凹槽）
+    // 内圈暗环
     ctx.beginPath(); ctx.arc(0, 0, r*0.62, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fill();
@@ -919,12 +960,11 @@ class Game {
     ctx.lineWidth = 0.5;
     ctx.stroke();
 
-    // 十字槽 — 带渐变深度
+    // 十字槽
     const slotW = 1.2, slotL = r * 0.5;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(-slotW, -slotL, slotW*2, slotL*2);
     ctx.fillRect(-slotL, -slotW, slotL*2, slotW*2);
-    // 槽内高光边
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.fillRect(-slotW, -slotL, 0.6, slotL*2);
     ctx.fillRect(-slotL, -slotW, slotL*2, 0.6);
@@ -941,12 +981,19 @@ class Game {
     ctx.ellipse(r*0.2, r*0.3, r*0.35, r*0.12, 0.3, 0, Math.PI*2);
     ctx.fill();
 
+    // 提示高亮环 — 更大更明显
     if (hint) {
-      ctx.strokeStyle = `rgba(255,255,255,${0.5+Math.sin(Date.now()/200)*0.3})`;
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([3, 3]);
-      ctx.lineDashOffset = -Date.now()/80;
-      ctx.beginPath(); ctx.arc(0,0,r+6,0,Math.PI*2); ctx.stroke();
+      const hp = Math.sin(Date.now()/180)*0.35+0.65;
+      // 外层大光环
+      ctx.strokeStyle = `rgba(255,215,0,${0.4*hp})`;
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
+      // 内层脉冲虚线
+      ctx.strokeStyle = `rgba(255,255,255,${0.5+Math.sin(Date.now()/180)*0.3})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -Date.now()/60;
+      ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -957,20 +1004,16 @@ class Game {
     if (!st.activeBox) return;
     const Y = 62, BW = 52, BH = 36;
 
-    // 背景条
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     rrect(ctx, 24, Y-6, 372, BH+16, 12);
     ctx.fill();
 
-    // 标签
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = '10px "PingFang SC","Microsoft YaHei"';
     ctx.textAlign = 'center';
     ctx.fillText('当前收纳盒', 210, Y-2);
 
-    // 当前盒子
     const bx = 175, by = Y+6;
-    // 脉冲光（螺丝刚进入时）
     let glowExtra = 0;
     if (st.boxGlow) {
       const elapsed = Date.now() - st.boxGlow;
@@ -1002,7 +1045,6 @@ class Game {
     ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei"';
     ctx.fillText(`${st.activeCount}/${st.cap}`, bx+BW/2, by+BH/2+5);
 
-    // 预览下一个
     if (st.boxes.length > 0) {
       const nx = 254, ny = by;
       ctx.fillStyle = st.boxes[0].f;
@@ -1011,7 +1053,6 @@ class Game {
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.font = '9px "PingFang SC","Microsoft YaHei"';
       ctx.fillText('下一个', nx+13, ny-8);
-      // 更多
       if (st.boxes.length > 1) {
         ctx.fillText(`+${st.boxes.length-1}`, nx+42, ny+BH/2+4);
       }
@@ -1040,7 +1081,6 @@ class Game {
         ctx.setLineDash([]);
       }
     }
-    // 标签
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.font = '10px "PingFang SC","Microsoft YaHei"';
     ctx.textAlign = 'center';
