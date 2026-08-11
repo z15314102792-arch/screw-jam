@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v1.8</title>
+<title>螺丝消除 v1.9</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -161,79 +161,40 @@ class Audio {
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
-    // 温暖氛围 BGM：五声音阶 + 慢和弦进行 + 低保真质感
-    // 参考: 真实 ScrewJam 使用放松/ASMR 风格配乐
-    const progression = [
-      {b:110.00, n:[220,261.6,329.6]},           // Am — 放松
-      {b:87.31,  n:[174.6,220,261.6,349.2]},     // Fmaj7 — 温暖
-      {b:130.81, n:[261.6,329.6,392,523.2]},     // C — 明亮
-      {b:98.00,  n:[196,246.9,329.6]},            // G — 平稳
-      {b:73.42,  n:[146.8,220,293.7,349.2]},     // Dm7 — 柔和
-      {b:110.00, n:[220,261.6,329.6,440]},        // Am — 回归
-      {b:87.31,  n:[174.6,261.6,349.2]},          // F — 舒展
-      {b:98.00,  n:[196,246.9,329.6,392]},        // G7 — 期待
-    ];
-    const chordLen = 3.0; // 慢节奏，每和弦3秒
-
-    progression.forEach((chord, ci) => {
-      const start = t + ci * chordLen;
-      // 低频铺底 — 温暖三角波
-      const bo = ctx.createOscillator(); bo.type = 'triangle';
-      bo.frequency.setValueAtTime(chord.b, start);
-      const bg = ctx.createGain();
-      bg.gain.setValueAtTime(0, start);
-      bg.gain.linearRampToValueAtTime(0.3, start + 0.06);
-      bg.gain.setValueAtTime(0.3, start + chordLen * 0.65);
-      bg.gain.exponentialRampToValueAtTime(0.001, start + chordLen * 0.92);
-      bo.connect(bg); bg.connect(mg); bo.start(start); bo.stop(start + chordLen);
-      this._bgmNodes.push(bo);
-
-      // 和弦铺底 — 柔正弦波 + 低通滤波（低保真温暖感）
-      chord.n.forEach((freq, fi) => {
-        const po = ctx.createOscillator(); po.type = 'sine';
-        po.frequency.setValueAtTime(freq, start);
-        po.detune.setValueAtTime((Math.random()-0.5)*6, start); // 微妙失谐
-        const pg = ctx.createGain();
-        pg.gain.setValueAtTime(0, start + fi * 0.1);
-        pg.gain.linearRampToValueAtTime(0.09, start + fi * 0.1 + 0.12);
-        pg.gain.exponentialRampToValueAtTime(0.001, start + chordLen * 0.88);
-        const lpf = ctx.createBiquadFilter();
-        lpf.type = 'lowpass'; lpf.frequency.value = 2000; // 低保真暖化
-        po.connect(lpf); lpf.connect(pg); pg.connect(mg);
-        po.start(start + fi * 0.1); po.stop(start + chordLen);
-        this._bgmNodes.push(po);
-      });
-
-      // 五声音阶旋律装饰 — 随机漫步，偶尔点缀
-      if (Math.random() > 0.3) {
-        const pentatonic = [261.6, 293.7, 329.6, 392, 440, 523.2, 587.3, 659.2, 784];
-        const melNote = pentatonic[Math.floor(Math.random() * pentatonic.length)];
-        const mt = start + Math.random() * chordLen * 0.5;
-        const mo = ctx.createOscillator(); mo.type = 'sine';
-        mo.frequency.setValueAtTime(melNote, mt);
-        const mg2 = ctx.createGain();
-        mg2.gain.setValueAtTime(0, mt);
-        mg2.gain.linearRampToValueAtTime(0.04, mt + 0.06);
-        mg2.gain.exponentialRampToValueAtTime(0.001, mt + 0.7);
-        mo.connect(mg2); mg2.connect(mg);
-        mo.start(mt); mo.stop(mt + 0.7);
-        this._bgmNodes.push(mo);
-      }
-
-      // 轻柔正弦打击（替代噪音沙锤）
-      for (let i = 0; i < 2; i++) {
-        const bt = start + i * (chordLen / 2) + (Math.random()-0.5)*0.1;
-        const co = ctx.createOscillator(); co.type = 'sine';
-        co.frequency.setValueAtTime(1800 + Math.random()*400, bt);
-        const cg = ctx.createGain(); cg.gain.setValueAtTime(0.015, bt);
-        cg.gain.exponentialRampToValueAtTime(0.001, bt + 0.04);
-        co.connect(cg); cg.connect(mg);
-        co.start(bt); co.stop(bt + 0.04);
-        this._bgmNodes.push(co);
-      }
+    // 极简五声音阶氛围 — 零噪音，纯正弦长音
+    // Am 五声音阶: A C D E G (110 131 147 165 196 Hz 低八度)
+    const notes = [110, 130.8, 146.8, 164.8, 196, 220, 261.6, 293.7, 329.6, 392];
+    const noteLen = 3.5;
+    // 随机抽取 5 个音符构成柔和序列
+    const seq = [];
+    for (let i = 0; i < 5; i++) {
+      seq.push(notes[Math.floor(Math.random() * notes.length)]);
+    }
+    seq.forEach((freq, i) => {
+      const start = t + i * noteLen;
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(freq, start);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, start);
+      g.gain.linearRampToValueAtTime(0.07, start + 0.6);
+      g.gain.setValueAtTime(0.07, start + noteLen * 0.65);
+      g.gain.linearRampToValueAtTime(0, start + noteLen * 0.92);
+      o.connect(g); g.connect(mg);
+      o.start(start); o.stop(start + noteLen);
+      this._bgmNodes.push(o);
     });
-
-    this._bgmTimer = setTimeout(() => this._bgmLoop(), progression.length * chordLen * 1000);
+    // 超低频底音（A2=110Hz 持续低吟）
+    const bo = ctx.createOscillator(); bo.type = 'sine';
+    bo.frequency.setValueAtTime(110, t);
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(0, t);
+    bg.gain.linearRampToValueAtTime(0.05, t + 1);
+    bg.gain.setValueAtTime(0.05, t + seq.length * noteLen * 0.8);
+    bg.gain.linearRampToValueAtTime(0, t + seq.length * noteLen * 0.95);
+    bo.connect(bg); bg.connect(mg);
+    bo.start(t); bo.stop(t + seq.length * noteLen);
+    this._bgmNodes.push(bo);
+    this._bgmTimer = setTimeout(() => this._bgmLoop(), seq.length * noteLen * 1000);
   }
   stopBGM() {
     clearTimeout(this._bgmTimer);
@@ -346,7 +307,7 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
     // 第2关开始引入非矩形形状
     const shape = lv <= 1 ? SHAPE_RECT : ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)];
     panels.push({ id:i, cx, cy, w:pw, h:ph, shape, screws:[], dropped:false, wobble:false,
-      wood, layer:i, _physAngle:0, _physOffX:0, _physOffY:0, _targetAngle:0, _targetOffX:0, _targetOffY:0
+      wood, layer:i, _physAngle:0, _pivotX:null, _pivotY:null, _targetAngle:0
     });
   }
   panels.sort((a,b) => a.layer - b.layer);
@@ -515,7 +476,7 @@ class Game {
       sid: screw.id,
       box: st.activeBox?{...st.activeBox}:null, cnt: st.activeCount, queue: [...st.boxes],
       temp: st.temp.map(t=>({...t})),
-      panels: st.panels.map(p=>({id:p.id, dropped:p.dropped, wobble:p.wobble, dropStart:p.dropStart, dropOffY:p.dropOffY, dropAngle:p.dropAngle, _physAngle:p._physAngle, _physOffX:p._physOffX, _physOffY:p._physOffY})),
+      panels: st.panels.map(p=>({id:p.id, dropped:p.dropped, wobble:p.wobble, dropStart:p.dropStart, dropOffY:p.dropOffY, dropAngle:p.dropAngle, _physAngle:p._physAngle, _pivotX:p._pivotX, _pivotY:p._pivotY})),
     });
 
     const target = this._getTarget(screw);
@@ -581,28 +542,27 @@ class Game {
     }
   }
 
-  // ★ 新增：物理模拟 — 螺丝移除后木板倾斜
+  // ★ 物理模拟 — 螺丝移除后木板绕支点旋转，重心下垂
   _updatePanelPhysics(screw) {
     const panel = this.st.panels.find(p => p.id === screw.panelId);
     if (!panel || panel.dropped) return;
-
     const remaining = panel.screws.filter(s => !s.removed);
     if (remaining.length === 1) {
-      // 只剩一颗螺丝 → 木板以此为支点悬挂
+      // 只剩一颗螺丝 → 支点，重心被重力拉下
       const sx = remaining[0].x, sy = remaining[0].y;
-      const dx = panel.cx - sx, dy = panel.cy - sy;
-      const angle = Math.atan2(dx, dy) * 0.65;
-      const dist = Math.sqrt(dx*dx+dy*dy) * 0.35;
-      panel._targetAngle = angle;
-      panel._targetOffX = Math.sin(angle) * dist;
-      panel._targetOffY = Math.cos(angle) * dist - dist;
+      const dx = panel.cx - sx, dy = panel.cy - sy; // 支点→重心向量
+      const currentAngle = Math.atan2(dx, dy); // 向量与垂直方向夹角
+      panel._targetAngle = -currentAngle * 0.5; // 重力将它往下拉
+      panel._targetAngle = Math.max(-0.65, Math.min(0.65, panel._targetAngle));
+      panel._pivotX = sx; panel._pivotY = sy;
+      panel._targetOffX = 0; panel._targetOffY = 0;
       if (!panel._wasTilting) {
         this.audio.play('panelTilt');
         panel._wasTilting = true;
       }
     } else if (remaining.length >= 2) {
-      // 两颗及以上 → 稳定
-      panel._targetAngle = 0; panel._targetOffX = 0; panel._targetOffY = 0;
+      panel._targetAngle = 0; panel._pivotX = null; panel._pivotY = null;
+      panel._targetOffX = 0; panel._targetOffY = 0;
       panel._wasTilting = false;
     }
   }
@@ -750,8 +710,9 @@ class Game {
       for (const ps of rec.panels) {
         const p=this.st.panels.find(p=>p.id===ps.id);
         if (p) { p.dropped=ps.dropped; p.wobble=ps.wobble; p.dropStart=ps.dropStart; p.dropOffY=ps.dropOffY; p.dropAngle=ps.dropAngle;
-          p._physAngle=ps._physAngle||0; p._physOffX=ps._physOffX||0; p._physOffY=ps._physOffY||0;
-          p._targetAngle=ps._physAngle||0; p._targetOffX=ps._physOffX||0; p._targetOffY=ps._physOffY||0; }
+          p._physAngle=ps._physAngle||0; p._pivotX=ps._pivotX; p._pivotY=ps._pivotY;
+          p._targetAngle=ps._physAngle||0; p._targetOffX=0; p._targetOffY=0;
+          if (ps._pivotX != null) { p._targetAngle = ps._physAngle||0; } }
       }
     }
     this.audio.play('click');
@@ -842,38 +803,21 @@ class Game {
     // 标记每个面板是否被遮挡
     for(const p of sortedPanels){if(p.dropped)continue;p._blocked=this._blocked(p);}
 
-    // ★ 首轮：画面板 + 可操作螺丝（不透明，嵌入面板）
+    // ★ 单轮层序渲染：画面板 → 面板上的螺丝（被遮=ghost半透明）
     for(const p of sortedPanels){
       if(p.dropped)continue;
-      // 物理倾斜 lerp（加吸附阈值，防浮动）
+      // 物理倾斜 lerp（吸附阈值防浮动）
       const eps=0.003;
       if(Math.abs(p._targetAngle-p._physAngle)<eps) p._physAngle=p._targetAngle;
       else p._physAngle+=(p._targetAngle-p._physAngle)*0.12;
-      if(Math.abs(p._targetOffX-p._physOffX)<eps) p._physOffX=p._targetOffX;
-      else p._physOffX+=(p._targetOffX-p._physOffX)*0.12;
-      if(Math.abs(p._targetOffY-p._physOffY)<eps) p._physOffY=p._targetOffY;
-      else p._physOffY+=(p._targetOffY-p._physOffY)*0.12;
 
       this._drawPanel(ctx, p, clipBottom);
-      // 仅绘制「不被遮挡」面板上的螺丝（可操作）
-      if(!p._blocked){
-        for(const s of p.screws){
-          if(s.removed)continue;
-          if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
-          const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
-          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
-        }
-      }
-    }
-
-    // ★ 二轮：在所有面板上方画被遮螺丝（半透明🚫浮层，一眼可见）
-    for(const p of sortedPanels){
-      if(p.dropped||!p._blocked)continue;
+      // 画螺丝：被遮 → ghost 半透明，未遮 → 正常
       for(const s of p.screws){
         if(s.removed)continue;
         if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
         const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
-        this._drawScrew(ctx, s.x, s.y, s.color, false, 0, sc, true);
+        this._drawScrew(ctx, s.x, s.y, s.color, p._blocked?false:(s===this.hinted), 0, sc, p._blocked);
       }
     }
 
@@ -939,14 +883,14 @@ class Game {
 
     ctx.save();
 
-    // ★ 物理倾斜 — 绕支撑螺丝旋转（不动时不浮）
-    const tiltAngle = p._physAngle || 0;
-    const tiltOffX = p._physOffX || 0;
-    const tiltOffY = p._physOffY || 0;
-    if (tiltAngle !== 0 || tiltOffX !== 0 || tiltOffY !== 0) {
-      ctx.translate(p.cx + tiltOffX, p.cy + tiltOffY);
-      ctx.rotate(tiltAngle);
-      ctx.translate(-p.cx, -p.cy);
+    // ★ 物理倾斜 — 绕支点螺丝旋转，重心下坠
+    if (p._pivotX != null) {
+      const angle = p._physAngle || 0;
+      if (Math.abs(angle) > 0.002) {
+        ctx.translate(p._pivotX, p._pivotY);
+        ctx.rotate(angle);
+        ctx.translate(-p._pivotX, -p._pivotY);
+      }
     }
 
     if(p.dropStart){ctx.translate(p.cx,p.cy);if(dropAngle)ctx.rotate(dropAngle);ctx.translate(0,dropOffY);ctx.translate(-p.cx,-p.cy);}
@@ -1012,7 +956,7 @@ class Game {
     ctx.restore();
   }
 
-  // ★ blocked=true → 螺丝半透明(被遮住不可操作)
+  // ★ blocked=true → ghost半透明渲染（扁平、无光泽、一眼看出不可操作）
   _drawScrew(ctx, x, y, col, hint, rot, scale, blocked) {
     ctx.save(); ctx.translate(x,y);
     if(scale&&scale!==1)ctx.scale(scale,scale);
@@ -1020,41 +964,55 @@ class Game {
 
     const r=12;
 
-    // 被遮挡 → 半透明 + 无光泽
-    if(blocked){ctx.globalAlpha=0.28;}
+    if(blocked){
+      // ghost 模式：极简扁平螺丝，半透明
+      ctx.globalAlpha = 0.22;
+      // 扁平填充
+      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(1.5,2.5,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
+      ctx.closePath();
+      ctx.fillStyle = col.f; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 0.5; ctx.stroke();
+      // 简化十字槽
+      ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(-1,-r*0.4,2,r*0.8); ctx.fillRect(-r*0.4,-1,r*0.8,2);
+      // 小锁标记
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#fff'; ctx.font = '7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', 0, 0);
+    } else {
+      // 正常螺丝渲染
+      if(hint){const pulse=Math.sin(Date.now()/150)*0.4+0.6;ctx.shadowColor=col.g;ctx.shadowBlur=34*pulse;}
 
-    if(hint&&!blocked){const pulse=Math.sin(Date.now()/150)*0.4+0.6;ctx.shadowColor=col.g;ctx.shadowBlur=34*pulse;}
+      ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
 
-    ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
+      ctx.closePath();
 
-    ctx.beginPath();
-    for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3,nx=r*Math.cos(a),ny=r*Math.sin(a),a1=a-Math.PI/6,a2=a+Math.PI/6;if(i===0)ctx.moveTo(r*0.85*Math.cos(a1),r*0.85*Math.sin(a1));ctx.quadraticCurveTo(nx,ny,r*0.85*Math.cos(a2),r*0.85*Math.sin(a2));}
-    ctx.closePath();
+      const grad=ctx.createRadialGradient(-2,-2.5,r*0.05,1,1,r*1.2);
+      grad.addColorStop(0,lighten(col.f,55)); grad.addColorStop(0.2,lighten(col.f,25));
+      grad.addColorStop(0.5,col.f); grad.addColorStop(0.8,col.d); grad.addColorStop(1,'rgba(0,0,0,0.3)');
+      ctx.fillStyle=grad; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.6; ctx.stroke();
 
-    const grad=ctx.createRadialGradient(-2,-2.5,r*0.05,1,1,r*1.2);
-    grad.addColorStop(0,lighten(col.f,55)); grad.addColorStop(0.2,lighten(col.f,25));
-    grad.addColorStop(0.5,col.f); grad.addColorStop(0.8,col.d); grad.addColorStop(1,'rgba(0,0,0,0.3)');
-    ctx.fillStyle=grad; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=0.6; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5; ctx.stroke();
 
-    ctx.beginPath(); ctx.arc(0,0,r*0.62,0,Math.PI*2);
-    ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5; ctx.stroke();
+      const slotW=1.2,slotL=r*0.5;
+      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(-slotW,-slotL,slotW*2,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,slotW*2);
+      ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
 
-    const slotW=1.2,slotL=r*0.5;
-    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(-slotW,-slotL,slotW*2,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,slotW*2);
-    ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
+      ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
 
-    ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
-
-    if(blocked){ctx.globalAlpha=1; ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🚫',0,0);}
-
-    if(hint&&!blocked){
-      const hp=Math.sin(Date.now()/180)*0.35+0.65;
-      ctx.strokeStyle='rgba(255,215,0,'+(0.4*hp)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
-      ctx.strokeStyle='rgba(255,255,255,'+(0.5+Math.sin(Date.now()/180)*0.3)+')'; ctx.lineWidth=3;
-      ctx.setLineDash([4,4]); ctx.lineDashOffset=-Date.now()/60; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+      if(hint){
+        const hp=Math.sin(Date.now()/180)*0.35+0.65;
+        ctx.strokeStyle='rgba(255,215,0,'+(0.4*hp)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,r+8,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle='rgba(255,255,255,'+(0.5+Math.sin(Date.now()/180)*0.3)+')'; ctx.lineWidth=3;
+        ctx.setLineDash([4,4]); ctx.lineDashOffset=-Date.now()/60; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+      }
     }
 
     ctx.restore();
