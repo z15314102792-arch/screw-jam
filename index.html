@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v2.3</title>
+<title>螺丝消除 v3.0</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -157,7 +157,7 @@ class Audio {
     }
   }
 
-  bgm() { if (this.on && this.ctx) this._bgmLoop(); }
+  bgm() { if (this.on && this.ctx) { this.stopBGM(); this._bgmLoop(); } }
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
@@ -317,7 +317,8 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
       wood, layer:i, _physAngle:0, _pivotX:null, _pivotY:null, _targetAngle:0
     });
   }
-  panels.sort((a,b) => a.layer - b.layer);
+  // ★ 空间层级：Y坐标越小（越靠上）→ 层号越大（后画=在上层）
+  panels.sort((a,b) => a.cy - b.cy);
   panels.forEach((p,i) => { p.layer = i; });
 
   // 4. 分配每板螺丝数（每板至少1颗，最多4颗，优先给重叠多的板）
@@ -452,7 +453,7 @@ function _isSolvable(st) {
     if (!p || p.dropped) return false;
     for (const op of panels) {
       if (op.id === p.id || op.dropped) continue;
-      if (op.layer > p.layer && _overlap(op, p)) return true;
+      if (op.layer > p.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, screw.x, screw.y)) return true;
     }
     return false;
   };
@@ -551,17 +552,22 @@ class Game {
     for (const s of st.screws) {
       if (s.removed) continue;
       const p = st.panels.find(p=>p.id===s.panelId);
-      if (p && !p.dropped && this._blocked(p)) continue;
+      if (p && !p.dropped && this._isScrewBlocked(s)) continue;
       const dx=mx-s.x, dy=my-s.y, d=dx*dx+dy*dy;
       if (d<600 && d<bestD) { best=s; bestD=d; }
     }
     if (best) this._remove(best);
   }
 
-  _blocked(panel) {
-    for (const p of this.st.panels) {
-      if (p.id===panel.id||p.dropped) continue;
-      if (p.layer>panel.layer && _overlap(p, panel)) return true;
+  // ★ 螺丝级阻塞：检查螺丝坐标是否被上层板的形状覆盖
+  _isScrewBlocked(screw) {
+    const panel = this.st.panels.find(p => p.id === screw.panelId);
+    if (!panel || panel.dropped) return false;
+    for (const op of this.st.panels) {
+      if (op.id === panel.id || op.dropped) continue;
+      if (op.layer > panel.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, screw.x, screw.y)) {
+        return true;
+      }
     }
     return false;
   }
@@ -822,7 +828,7 @@ class Game {
     for (const s of st.screws) {
       if (s.removed) continue;
       const p=st.panels.find(p=>p.id===s.panelId);
-      if (p&&!p.dropped&&this._blocked(p)) continue;
+      if (p&&!p.dropped&&this._isScrewBlocked(s)) continue;
       if (st.activeBox&&s.color.n===st.activeBox.n) { best=s; break; }
       if (!best) best=s;
     }
@@ -898,7 +904,7 @@ class Game {
     const sortedPanels=[...st.panels].sort((a,b)=>a.layer-b.layer);
 
     // 标记每个面板是否被遮挡
-    for(const p of sortedPanels){if(p.dropped)continue;p._blocked=this._blocked(p);}
+    // 螺丝级阻塞：每颗螺丝独立判断（不再面板级标记）
 
     // ★ 单轮逐层渲染：螺丝绑定所在木板，不浮层
     // 最上层（未遮挡）→ 螺丝正常色；被遮挡层 → 螺丝半透明附在木板层序内
@@ -915,16 +921,16 @@ class Game {
         if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
         const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
 
-        if(!p._blocked){
-          // 顶层：正常颜色螺丝
+        if(!this._isScrewBlocked(s)){
+          // 螺丝露在外面 → 正常颜色可操作
           this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
         } else {
-          // 被遮挡层：半透明 ghost，画在此板层序内，上层板会自然遮盖
+          // 螺丝被上层板盖住 → 半透明 ghost
           ctx.save();
-          ctx.globalAlpha = 0.28;
+          ctx.globalAlpha = 0.25;
           this._drawScrewRaw(ctx, s.x, s.y, s.color);
-          ctx.globalAlpha = 0.55;
-          ctx.fillStyle = '#444'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#666'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText('🔒', s.x, s.y);
           ctx.restore();
         }
