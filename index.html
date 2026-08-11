@@ -12,7 +12,7 @@
 <meta name="browsermode" content="application">
 <meta name="full-screen" content="yes">
 <meta name="360-fullscreen" content="true">
-<title>螺丝消除 - 解压小游戏 v1.4</title>
+<title>螺丝消除 - 解压小游戏 v1.5</title>
 <script>
 // === 微信环境提前防护 ===
 (function(){
@@ -139,10 +139,10 @@ class Audio {
         this.ctx = new (window.AudioContext||window.webkitAudioContext)();
         if (this.ctx.state === 'suspended') this.ctx.resume();
         this.master = this.ctx.createGain();
-        this.master.gain.value = 0.5;
+        this.master.gain.value = 0.65;
         this.master.connect(this.ctx.destination);
         this.bgmGain = this.ctx.createGain();
-        this.bgmGain.gain.value = 0.06;
+        this.bgmGain.gain.value = 0.22;
         this.bgmGain.connect(this.master);
         console.log('AudioContext 已解锁');
       } catch(e) { this.on = false; console.warn('AudioContext 创建失败:', e); }
@@ -233,25 +233,24 @@ class Audio {
     if (!this.on) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
     // Lo-fi 解压 BGM：bass + pads + soft beats
-    // 和弦进行：Am - F - C - G (A3=220, F3=174.6, C3=130.8, G2=98)
     const chords = [
       [220, 261.6, 329.6], // Am
       [174.6, 220, 261.6], // F
       [261.6, 329.6, 392],  // C
       [196, 246.9, 329.6],  // G
     ];
-    const bassNotes = [110, 87.3, 130.8, 98]; // 低八度
-    const beatLen = 1.8; // 每和弦1.8秒
+    const bassNotes = [110, 87.3, 130.8, 98];
+    const beatLen = 1.8;
 
     chords.forEach((ch, ci) => {
       const start = t + ci * beatLen;
-      // Bass — 柔和的低音底
+      // Bass — 加强音量
       const bo = ctx.createOscillator(); bo.type = 'triangle';
       bo.frequency.setValueAtTime(bassNotes[ci], start);
       const bg = ctx.createGain();
       bg.gain.setValueAtTime(0, start);
-      bg.gain.linearRampToValueAtTime(0.07, start + 0.04);
-      bg.gain.setValueAtTime(0.07, start + beatLen * 0.6);
+      bg.gain.linearRampToValueAtTime(0.15, start + 0.04);
+      bg.gain.setValueAtTime(0.15, start + beatLen * 0.6);
       bg.gain.exponentialRampToValueAtTime(0.001, start + beatLen * 0.9);
       bo.connect(bg); bg.connect(mg);
       bo.start(start); bo.stop(start + beatLen);
@@ -263,14 +262,14 @@ class Audio {
         po.frequency.setValueAtTime(f, start);
         const pg = ctx.createGain();
         pg.gain.setValueAtTime(0, start + fi * 0.06);
-        pg.gain.linearRampToValueAtTime(0.025, start + fi * 0.06 + 0.08);
+        pg.gain.linearRampToValueAtTime(0.05, start + fi * 0.06 + 0.08);
         pg.gain.exponentialRampToValueAtTime(0.001, start + beatLen * 0.85);
         po.connect(pg); pg.connect(mg);
         po.start(start + fi * 0.06); po.stop(start + beatLen);
         this._bgmNodes.push(po);
       });
 
-      // Soft hi-hat — 沙沙声
+      // Hi-hat — 沙沙声
       for (let i = 0; i < 4; i++) {
         const ht = start + i * (beatLen / 4);
         const buf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
@@ -278,16 +277,19 @@ class Audio {
         for (let j = 0; j < d.length; j++) d[j] = (Math.random()*2-1) * Math.exp(-j/(ctx.sampleRate*0.008));
         const hs = ctx.createBufferSource(); hs.buffer = buf;
         const hf = ctx.createBiquadFilter(); hf.type = 'highpass'; hf.frequency.value = 6000;
-        const hg = ctx.createGain(); hg.gain.setValueAtTime(0.02, ht); hg.gain.exponentialRampToValueAtTime(0.001, ht + 0.04);
+        const hg = ctx.createGain(); hg.gain.setValueAtTime(0.04, ht); hg.gain.exponentialRampToValueAtTime(0.001, ht + 0.04);
         hs.connect(hf); hf.connect(hg); hg.connect(mg);
         hs.start(ht); hs.stop(ht + 0.04);
         this._bgmNodes.push(hs);
       }
 
-      // 轻拍 — 木鱼感
+      // 木鱼轻拍
       if (ci % 2 === 0) {
         const kt = start + beatLen * 0.02;
-        tone(300, 0.08, 0.02, 'sine');
+        const to = ctx.createOscillator(); to.type = 'sine'; to.frequency.setValueAtTime(300, kt);
+        const tg = ctx.createGain(); tg.gain.setValueAtTime(0.03, kt); tg.gain.exponentialRampToValueAtTime(0.001, kt + 0.08);
+        to.connect(tg); tg.connect(mg); to.start(kt); to.stop(kt + 0.08);
+        this._bgmNodes.push(to);
       }
     });
 
@@ -310,7 +312,6 @@ const COLS = [
   {n:'orange', f:'#e67e22', g:'#f0a04b', d:'#a05517'},
 ];
 
-// 木板配色 — 多种木纹色调
 const WOODS = [
   {base:'#e8d5b7', dark:'#c4a882', light:'#f5ede0', name:'浅橡木'},
   {base:'#d4c0a0', dark:'#b89a7a', light:'#e8dcc8', name:'蜂蜜木'},
@@ -323,22 +324,26 @@ const WOODS = [
 ];
 
 function genLevel(lv) {
-  // 难度曲线：快速递增
+  // 难度曲线 — 比 v1.4 更难：更少临时位、更多面板、面板更集中重叠
   let numCol, cap, numPanel, tempMax;
   if (lv === 1) {
-    numCol = 2; cap = 3; numPanel = 3; tempMax = 7;
+    numCol = 2; cap = 3; numPanel = 3; tempMax = 5;
   } else if (lv === 2) {
-    numCol = 2; cap = 4; numPanel = 4; tempMax = 6;
+    numCol = 2; cap = 4; numPanel = 4; tempMax = 5;
   } else if (lv <= 3) {
-    numCol = 3; cap = 3; numPanel = 5; tempMax = 6;
+    numCol = 3; cap = 3; numPanel = 5; tempMax = 5;
   } else if (lv <= 5) {
-    numCol = 3; cap = 3; numPanel = Math.min(5 + (lv-3), 8); tempMax = 7;
-  } else if (lv <= 8) {
-    numCol = 4; cap = 3; numPanel = Math.min(6 + (lv-5), 9); tempMax = 7;
-  } else if (lv <= 12) {
-    numCol = 5; cap = 3; numPanel = Math.min(7 + (lv-8), 10); tempMax = 8;
+    numCol = 3; cap = 3; numPanel = 6; tempMax = 5;
+  } else if (lv <= 7) {
+    numCol = 4; cap = 3; numPanel = 7; tempMax = 6;
+  } else if (lv <= 10) {
+    numCol = 4; cap = 3; numPanel = 8; tempMax = 6;
+  } else if (lv <= 13) {
+    numCol = 5; cap = 3; numPanel = Math.min(8 + (lv-11), 9); tempMax = 6;
+  } else if (lv <= 17) {
+    numCol = 5; cap = 3; numPanel = 9; tempMax = 7;
   } else {
-    numCol = 6; cap = 3; numPanel = Math.min(8 + Math.floor((lv-12)/3), 10); tempMax = 8;
+    numCol = 6; cap = 3; numPanel = Math.min(9 + Math.floor((lv-18)/4), 10); tempMax = 8;
   }
 
   const total = numCol * cap;
@@ -346,14 +351,12 @@ function genLevel(lv) {
 
   const GX=30, GY=130, GW=360, GH=340;
 
-  // 反复生成直到可解
   let attempts = 0;
-  while (attempts < 30) {
+  while (attempts < 80) {
     attempts++;
     const result = _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
     if (result && _isSolvable(result)) return result;
   }
-  // 兜底：返回最后一次生成的（大概率可解）
   return _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
 }
 
@@ -362,23 +365,24 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
+  // 面板集中放置 — 增加重叠和遮挡
   const panels = [];
   for (let i = 0; i < numPanel; i++) {
     const pw = 70 + Math.random() * 80;
     const ph = 50 + Math.random() * 60;
-    const cx = GX + 30 + Math.random() * (GW - 60);
-    const cy = GY + 30 + Math.random() * (GH - 80);
+    // 面板围绕中心区域分布，范围收窄以增加重叠
+    const cx = GX + GW/2 + (Math.random() - 0.5) * GW * 0.6;
+    const cy = GY + GH/2 + (Math.random() - 0.5) * GH * 0.55;
     const wood = WOODS[i % WOODS.length];
     panels.push({ id:i, cx, cy, w:pw, h:ph, screws:[], dropped:false, wobble:false,
-      wood: wood,
-      layer: i
+      wood: wood, layer: i
     });
   }
 
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
-  // 每块木板至少1颗螺丝
+  // 每板至少1颗螺丝
   let si = 0;
   panels.forEach(p => {
     p.screws.push({
@@ -387,7 +391,6 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
     });
     si++;
   });
-  // 剩余螺丝随机分配
   while (si < total) {
     const p = panels[Math.floor(Math.random() * panels.length)];
     const cnt = p.screws.length;
@@ -401,7 +404,6 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   }
 
   const allScrews = panels.flatMap(p => p.screws);
-
   const boxes = [];
   colors.forEach(c => { boxes.push(c); });
   shuffle(boxes);
@@ -415,22 +417,15 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   };
 }
 
-// 贪心求解器：验证关卡可解
 function _isSolvable(st) {
-  // 深拷贝关键状态
-  const screws = st.screws.map(s => ({...s, removed: false}));
-  const panels = st.panels.map(p => ({
-    ...p, dropped: false, screws: p.screws.map(s => ({...s, removed: false}))
-  }));
-  // 重新关联：panels 中的 screws 需要和 screws 数组共享引用
-  // 简化做法：直接在 screws 上操作
+  const screws = st.screws.map(s => ({...s}));
+  const panels = st.panels.map(p => ({...p, dropped:false}));
   const temp = [];
   const tempMax = st.tempMax;
   let activeBox = {...st.activeBox};
   let activeCount = st.activeCount;
   const boxes = st.boxes.map(b => ({...b}));
 
-  // 辅助：面板是否被遮挡
   const blocked = (screw) => {
     const p = panels.find(p => p.id === screw.panelId);
     if (!p || p.dropped) return false;
@@ -441,16 +436,13 @@ function _isSolvable(st) {
     return false;
   };
 
-  // 贪心策略：优先移匹配的，否则移不匹配的到 temp
   let stuck = 0;
   while (screws.some(s => !s.removed) && stuck < screws.length * 3) {
-    // 优先找匹配当前盒子且可访问的
     let found = null;
     for (const s of screws) {
       if (s.removed || blocked(s)) continue;
       if (activeBox && s.color.n === activeBox.n) { found = s; break; }
     }
-    // 没有匹配的，随便找一个可访问的放 temp
     if (!found) {
       for (const s of screws) {
         if (s.removed || blocked(s)) continue;
@@ -460,21 +452,17 @@ function _isSolvable(st) {
     if (!found) { stuck++; continue; }
 
     found.removed = true;
-    // 检查面板
     const panel = panels.find(p => p.id === found.panelId);
     if (panel && panel.screws.every(ps => {
       const s = screws.find(ss => ss.id === ps.id);
       return s ? s.removed : ps.removed;
-    })) {
-      panel.dropped = true;
-    }
+    })) { panel.dropped = true; }
 
     if (activeBox && found.color.n === activeBox.n) {
       activeCount++;
       if (activeCount >= st.cap) {
         activeBox = boxes.length > 0 ? boxes.shift() : null;
         activeCount = 0;
-        // 自动从 temp 匹配
         if (activeBox) {
           for (let i = temp.length-1; i >= 0; i--) {
             if (temp[i].color.n === activeBox.n) {
@@ -490,12 +478,11 @@ function _isSolvable(st) {
         }
       }
     } else {
-      if (temp.length >= tempMax) return false; // temp 满了，不可解
+      if (temp.length >= tempMax) return false;
       temp.push({ color: found.color });
       stuck = 0;
     }
   }
-
   return screws.every(s => s.removed);
 }
 
@@ -522,6 +509,7 @@ class Game {
     this.paused = false;
     this.busy = false;
     this._autoClearing = false;
+    this._flyAuto = []; // 自动收纳飞行螺丝
     this._size();
     window.addEventListener('resize', () => this._size());
     this.cvs.addEventListener('click', e => this._tap(e));
@@ -549,6 +537,7 @@ class Game {
     this.busy = false;
     this.paused = false;
     this._autoClearing = false;
+    this._flyAuto = [];
     this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
     this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
     hideAll();
@@ -570,6 +559,7 @@ class Game {
       this.busy = false;
       this.paused = false;
       this._autoClearing = false;
+      this._flyAuto = [];
       this.shakeX = 0; this.shakeDur = 0; this.shakeStart = null;
       this.st.combo = 0; this.st.comboTime = 0; this.st.boxGlow = null;
       hideAll();
@@ -704,7 +694,6 @@ class Game {
 
     this._checkPanels();
     if (st.screws.every(s => s.removed)) {
-      // 所有螺丝清除，先自动收纳暂存区
       setTimeout(() => this._autoClearTemp(), 600);
     }
   }
@@ -731,17 +720,37 @@ class Game {
   _autoClearTemp() {
     const st = this.st;
     if (st.temp.length === 0) {
-      setTimeout(() => this._win(), 300);
+      // 等飞行螺丝全部落地后再结束
+      if (this._flyAuto.length === 0) {
+        setTimeout(() => this._win(), 300);
+      } else {
+        setTimeout(() => this._autoClearTemp(), 150);
+      }
       return;
     }
     this._autoClearing = true;
 
-    // 逐个将暂存区螺丝自动匹配
     const processNext = () => {
-      if (st.temp.length === 0 || !st.activeBox) {
-        // 没有可匹配的了（或盒子用完了），结束
+      if (st.temp.length === 0) {
+        if (this._flyAuto.length === 0) {
+          this._autoClearing = false;
+          setTimeout(() => this._win(), 400);
+        } else {
+          setTimeout(processNext, 150);
+        }
+        return;
+      }
+
+      if (!st.activeBox) {
         this._autoClearing = false;
-        setTimeout(() => this._win(), 400);
+        if (this._flyAuto.length === 0) {
+          setTimeout(() => this._win(), 400);
+        } else {
+          setTimeout(() => {
+            if (this._flyAuto.length === 0) this._win();
+            else setTimeout(() => { if (this._flyAuto.length===0) this._win(); }, 300);
+          }, 300);
+        }
         return;
       }
 
@@ -752,34 +761,51 @@ class Game {
       }
 
       if (idx >= 0) {
-        st.temp.splice(idx, 1);
-        st.activeCount++;
-        this.audio.play('autoMatch');
-        st.boxGlow = Date.now();
-        const target = { x: 196, y: 80 };
-        this.ps.push(...sparks(target.x, target.y, st.activeBox.g, 8));
+        const c = st.temp[idx].color;
+        // 从暂存区位置飞到盒子 — 带动画！
+        const tx = (420 - st.tempMax * 44) / 2;
+        const fromX = tx + idx * 44 + 19, fromY = 540;
+        const toX = 196, toY = 80;
 
-        if (st.activeCount >= st.cap) {
-          this.audio.play('boxFull');
-          this.ps.push(...burst(210, 65, st.activeBox.g, 14));
-          st.activeBox = st.boxes.length > 0 ? st.boxes.shift() : null;
-          st.activeCount = 0;
-        }
-        setTimeout(processNext, 250);
+        this.audio.play('autoMatch');
+        st.temp.splice(idx, 1);
+
+        // 创建飞行螺丝对象，和正常拧出一样走弧线动画
+        this._flyAuto.push({
+          x: fromX, y: fromY,
+          tx: toX, ty: toY,
+          color: c,
+          frame: 0, dur: 20,
+          boxN: st.activeBox.n,
+        });
+
+        // 飞行结束后才计数
+        setTimeout(() => {
+          st.activeCount++;
+          st.boxGlow = Date.now();
+          this.ps.push(...sparks(toX, toY, st.activeBox.g, 8));
+          if (st.activeCount >= st.cap) {
+            this.audio.play('boxFull');
+            this.ps.push(...burst(210, 65, st.activeBox.g, 14));
+            st.activeBox = st.boxes.length > 0 ? st.boxes.shift() : null;
+            st.activeCount = 0;
+          }
+          processNext();
+        }, 420);
       } else {
-        // 当前盒子不匹配任何暂存螺丝，换下一个盒子试试
+        // 不匹配，换下一个盒子
         if (st.boxes.length > 0) {
-          // 当前盒子放回队列末尾（暂存螺丝可能匹配后面的）
           const curBox = st.activeBox;
           st.activeBox = st.boxes.shift();
           st.activeCount = 0;
           st.boxes.push(curBox);
-          // 防止无限循环：如果转了一圈还没匹配到，停止
-          setTimeout(processNext, 200);
+          setTimeout(processNext, 250);
         } else {
-          // 没有更多盒子了
           this._autoClearing = false;
-          setTimeout(() => this._win(), 400);
+          setTimeout(() => {
+            if (this._flyAuto.length === 0) this._win();
+            else setTimeout(() => { if (this._flyAuto.length===0) this._win(); }, 300);
+          }, 400);
         }
       }
     };
@@ -941,7 +967,6 @@ class Game {
     if (!st) { ctx.restore(); return; }
 
     const GX=30, GY=130, GW=360, GH=340;
-    const clipBottom = GY + GH; // 470
 
     let shakeX = 0, shakeY = 0;
     if (this.shakeStart) {
@@ -971,7 +996,7 @@ class Game {
     rrect(ctx, GX+shakeX, GY+shakeY, GW, GH, 16);
     ctx.stroke();
 
-    // 蒙版裁剪线
+    const clipBottom = GY + GH;
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -979,12 +1004,10 @@ class Game {
     ctx.lineTo(GX+GW, clipBottom);
     ctx.stroke();
 
-    // 面板绘制
     ctx.save();
     ctx.translate(shakeX, shakeY);
     ctx.save();
     ctx.beginPath();
-    // 扩大裁剪区 — 让木板有更多下落空间
     ctx.rect(GX-30, GY-30, GW+60, GH+100);
     ctx.clip();
 
@@ -995,6 +1018,7 @@ class Game {
     }
     ctx.restore();
 
+    // 绘制正常螺丝（含飞行中的）
     for (const s of st.screws) {
       if (s.removed && s.animPhase !== 'flying') continue;
       let sx = s.x, sy = s.y, rot = 0, sc = 1;
@@ -1008,6 +1032,34 @@ class Game {
       this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot, sc);
     }
 
+    // 绘制自动收纳飞行螺丝 — 和正常螺丝一样的弧线飞行
+    for (const fs of this._flyAuto) {
+      const t = fs.frame / fs.dur;
+      const ease = 1 - Math.pow(1 - t, 3);
+      const arc = Math.sin(t * Math.PI) * 55;
+      const sx = fs.x + (fs.tx - fs.x) * ease;
+      const sy = fs.y + (fs.ty - fs.y) * ease - arc;
+      const sc = 1 - t * 0.4;
+      const rot = t * Math.PI * 1.5;
+      this._drawScrew(ctx, sx, sy, fs.color, false, rot, sc);
+      // 拖尾粒子
+      if (fs.frame % 2 === 0) this.ps.push({
+        x: sx + (Math.random()-0.5)*5,
+        y: sy + (Math.random()-0.5)*5,
+        vx: (Math.random()-0.5)*1, vy: (Math.random()-0.5)*1,
+        life: 0.5, decay: 0.05, size: 1.5 + Math.random()*2,
+        color: fs.color.g,
+      });
+    }
+
+    // 更新飞行螺丝
+    const alive = [];
+    for (const fs of this._flyAuto) {
+      fs.frame++;
+      if (fs.frame < fs.dur) alive.push(fs);
+    }
+    this._flyAuto = alive;
+
     for (const p of this.ps) {
       ctx.globalAlpha = p.life;
       ctx.fillStyle = p.color;
@@ -1019,7 +1071,6 @@ class Game {
     this._drawBoxes(ctx, st);
     this._drawTemp(ctx, st);
 
-    // 自动收纳提示
     if (this._autoClearing) {
       ctx.fillStyle = 'rgba(255,215,0,0.7)';
       ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei"';
@@ -1051,12 +1102,10 @@ class Game {
     let dropOffY = 0, dropAngle = 0;
     if (p.dropStart) {
       const elapsed = (Date.now() - p.dropStart) / 1000;
-      // 更慢的下落速度：加速度减半
       dropOffY = elapsed * elapsed * 160;
       dropAngle = Math.sin(elapsed * 2.5) * 0.35 * Math.min(elapsed * 1.5, 1);
       p.dropOffY = dropOffY;
       p.dropAngle = dropAngle;
-      // 给更多下落空间才消失
       if (p.cy + dropOffY - p.h/2 > clipBottom + 80) return;
     }
 
@@ -1074,16 +1123,13 @@ class Game {
       ctx.translate(-p.cx, -p.cy);
     }
 
-    // 外层阴影
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     rrect(ctx, x+3, y+3, p.w, p.h, R);
     ctx.fill();
-    // 内层阴影
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     rrect(ctx, x+1, y+1, p.w, p.h, R);
     ctx.fill();
 
-    // 面板主体 — 使用 wood 配色
     const grad = ctx.createLinearGradient(x, y, x+p.w, y+p.h);
     grad.addColorStop(0, wood.light);
     grad.addColorStop(0.35, wood.base);
@@ -1093,7 +1139,6 @@ class Game {
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.fill();
 
-    // 顶部高光条
     const hiGrad = ctx.createLinearGradient(x, y, x, y+p.h*0.45);
     hiGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
     hiGrad.addColorStop(1, 'rgba(255,255,255,0)');
@@ -1101,25 +1146,20 @@ class Game {
     rrect(ctx, x+5, y+3, p.w-10, p.h*0.35, R-4);
     ctx.fill();
 
-    // 边框
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1.2;
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.stroke();
-
-    // 内边框 — 浅色
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 0.8;
     rrect(ctx, x+1.5, y+1.5, p.w-3, p.h-3, R-1);
     ctx.stroke();
 
-    // 木纹 — 更真实的多层纹理
     ctx.save();
     ctx.beginPath();
     rrect(ctx, x, y, p.w, p.h, R);
     ctx.clip();
 
-    // 横向纹理线
     ctx.strokeStyle = 'rgba(0,0,0,0.04)';
     ctx.lineWidth = 0.6;
     for (let i = -p.h/2 + p.h*0.15; i < p.h/2; i += p.h*0.22) {
@@ -1129,7 +1169,6 @@ class Game {
       ctx.stroke();
     }
 
-    // 竖向细纹（木纹纤维感）
     ctx.strokeStyle = 'rgba(0,0,0,0.025)';
     ctx.lineWidth = 0.4;
     for (let i = -p.w/2 + p.w*0.2; i < p.w/2; i += p.w*0.3) {
@@ -1139,7 +1178,6 @@ class Game {
       ctx.stroke();
     }
 
-    // 随机木节
     ctx.fillStyle = 'rgba(0,0,0,0.04)';
     ctx.beginPath();
     ctx.ellipse(p.cx + p.w*0.25, p.cy + p.h*0.15, 3, 2, 0.3, 0, Math.PI*2);
@@ -1150,7 +1188,6 @@ class Game {
 
     ctx.restore();
 
-    // 螺丝孔标记（浅色小圆）
     for (const s of p.screws) {
       if (s.removed) continue;
       ctx.fillStyle = 'rgba(0,0,0,0.08)';
@@ -1222,7 +1259,6 @@ class Game {
     ctx.beginPath();
     ctx.ellipse(-r*0.25, -r*0.35, r*0.28, r*0.2, -0.5, 0, Math.PI*2);
     ctx.fill();
-
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.beginPath();
     ctx.ellipse(r*0.2, r*0.3, r*0.35, r*0.12, 0.3, 0, Math.PI*2);
