@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>螺丝消除 - 解压小游戏</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'PingFang SC','Microsoft YaHei',sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#gc{position:absolute;top:0;left:0;width:100%;height:100%}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#ui>*{pointer-events:auto}
+#top{position:absolute;top:10px;left:0;width:100%;display:flex;justify-content:space-between;padding:0 14px}
+#lv{color:#fff;font-size:15px;font-weight:bold;background:rgba(0,0,0,0.45);padding:5px 14px;border-radius:20px;letter-spacing:1px}
+#top-right{display:flex;gap:6px}
+.icon-btn{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#btns{position:absolute;bottom:22px;left:0;width:100%;display:flex;justify-content:center;gap:10px}
+.gbtn{padding:10px 22px;border-radius:22px;border:none;font-size:13px;font-weight:bold;cursor:pointer;transition:transform .15s;color:#fff;background:rgba(255,255,255,0.12);letter-spacing:0.5px}
+.gbtn:active{transform:scale(.95)}
+.gbtn.hint{background:rgba(255,200,0,0.2);color:#ffd700}
+.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.72);display:flex;justify-content:center;align-items:center;z-index:20}
+.overlay.hidden{display:none}
+.card{background:linear-gradient(155deg,#1a1a2e,#16213e);border-radius:22px;padding:32px 26px;text-align:center;color:#fff;max-width:300px;width:90%;border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 64px rgba(0,0,0,0.55)}
+.card h2{font-size:22px;margin:6px 0}
+.card p{color:rgba(255,255,255,0.65);font-size:13px;margin:8px 0 18px;line-height:1.65}
+.card .emoji{font-size:52px;margin-bottom:8px}
+.btn-big{display:inline-block;padding:13px 38px;border-radius:28px;border:none;font-size:15px;font-weight:bold;cursor:pointer;background:linear-gradient(135deg,#e94560,#f06292);color:#fff;transition:all .18s;letter-spacing:1px}
+.btn-big:active{transform:scale(.95);box-shadow:0 6px 24px rgba(233,69,96,0.45)}
+.btn-sub{display:inline-block;padding:9px 28px;border-radius:22px;border:1px solid rgba(255,255,255,0.28);font-size:13px;cursor:pointer;background:transparent;color:#fff;margin-top:10px}
+.stars{font-size:42px;margin:10px 0;letter-spacing:4px}
+</style>
+</head>
+<body>
+<canvas id="gc"></canvas>
+<div id="ui">
+  <div id="top">
+    <div id="lv">第 1 关</div>
+    <div id="top-right">
+      <button class="icon-btn" id="btnSound" onclick="G.sound()">🔊</button>
+      <button class="icon-btn" onclick="G.pause()">⏸</button>
+    </div>
+  </div>
+  <div id="btns">
+    <button class="gbtn" onclick="G.undo()">↩ 撤销</button>
+    <button class="gbtn" onclick="G.restart()">🔄 重来</button>
+    <button class="gbtn hint" onclick="G.hint()">💡 提示</button>
+  </div>
+
+  <div class="overlay" id="ovStart"><div class="card">
+    <div class="emoji">🔩</div><h2>螺丝消除</h2>
+    <p>拧下彩色螺丝<br>放入同色收纳盒 · 清空面板过关<br>🎵 建议打开声音体验 ASMR 解压</p>
+    <button class="btn-big" onclick="G.start(1)">开始游戏</button>
+  </div></div>
+
+  <div class="overlay hidden" id="ovWin"><div class="card">
+    <div class="stars" id="starsShow">⭐⭐⭐</div><h2>过关！</h2><p id="winMsg"></p>
+    <button class="btn-big" onclick="G.next()">下一关 ▶</button><br>
+    <button class="btn-sub" onclick="G.restart()">再玩一次</button>
+  </div></div>
+
+  <div class="overlay hidden" id="ovLose"><div class="card">
+    <div class="emoji">😵</div><h2>放不下了！</h2><p>临时存放区已满<br>换个顺序试试吧</p>
+    <button class="btn-big" onclick="G.restart()">再试一次 🔄</button>
+  </div></div>
+
+  <div class="overlay hidden" id="ovPause"><div class="card">
+    <div class="emoji">⏸</div><h2>暂停中</h2>
+    <button class="btn-big" onclick="G.resume()">继续游戏 ▶</button>
+  </div></div>
+</div>
+
+<script>
+// ==================== 音效引擎 ====================
+class Audio {
+  constructor() {
+    this.on = true;
+    this.ctx = null;
+    this.bgmNodes = [];
+    this.bgmTimer = null;
+    this._boot();
+  }
+  _boot() {
+    const fn = () => {
+      if (this.ctx) return;
+      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+      this.bgmGain = this.ctx.createGain();
+      this.bgmGain.gain.value = 0.025;
+      this.bgmGain.connect(this.master);
+    };
+    ['touchstart','mousedown','click'].forEach(e => document.addEventListener(e, fn, {once:true}));
+  }
+  t() { return this.ctx ? this.ctx.currentTime : 0 }
+
+  play(k) {
+    if (!this.on || !this.ctx) return;
+    const t = this.t();
+    const m = this.master;
+    // 噪声辅助函数
+    const noise = (dur, fLo, fHi, q, vol) => {
+      const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1)*Math.exp(-i/(this.ctx.sampleRate*0.015));
+      const s = this.ctx.createBufferSource(); s.buffer = buf;
+      const flt = this.ctx.createBiquadFilter();
+      if (fLo && fHi) { flt.type='bandpass'; flt.frequency.value=(fLo+fHi)/2; flt.Q.value=q||3; }
+      else { flt.type='lowpass'; flt.frequency.value=fLo||800; }
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+      s.connect(flt); flt.connect(g); g.connect(m);
+      s.start(t); s.stop(t+dur);
+    };
+    const tone = (f, dur, vol, type='sine', freqEnd=null) => {
+      const o = this.ctx.createOscillator(); o.type=type; o.frequency.setValueAtTime(f,t);
+      if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd,t+dur);
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+      o.connect(g); g.connect(m); o.start(t); o.stop(t+dur);
+    };
+
+    switch(k) {
+      case 'unscrew':
+        noise(0.1, 2500, 4500, 5, 0.07); // 金属摩擦
+        for(let i=0;i<3;i++) tone(2200+i*150, 0.03, 0.05, 'sine'); // 滴答
+        break;
+      case 'boxIn':
+        tone(750, 0.07, 0.09, 'triangle', 380);
+        break;
+      case 'boxFull':
+        [523,659,784].forEach((f,i) => {
+          setTimeout(() => tone(f, 0.28, 0.07, 'sine'), i*80);
+        });
+        break;
+      case 'panelDrop':
+        tone(180, 0.22, 0.11, 'sine', 55);
+        noise(0.1, 400, 1200, 2, 0.05);
+        break;
+      case 'panelWobble':
+        tone(110, 0.2, 0.04, 'sine');
+        break;
+      case 'win':
+        [523,659,784,1047,784,1047].forEach((f,i) => {
+          setTimeout(() => tone(f, 0.35, 0.09, 'sine'), i*95);
+        });
+        break;
+      case 'lose':
+        tone(180, 0.3, 0.07, 'square', 110);
+        break;
+      case 'hint':
+        [700,900].forEach((f,i) => setTimeout(() => tone(f, 0.2, 0.05, 'sine'), i*100));
+        break;
+      case 'click':
+        tone(1100, 0.025, 0.03, 'sine');
+        break;
+    }
+  }
+
+  bgm() {
+    if (!this.on || !this.ctx) return;
+    this._bgmLoop();
+  }
+  _bgmLoop() {
+    if (!this.on) return;
+    const notes = [262,330,392,330,294,392,440,392];
+    const dur = 1.1;
+    const t = this.t();
+    notes.forEach((f,i) => {
+      const o = this.ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(0,t+i*dur); g.gain.linearRampToValueAtTime(0.05,t+i*dur+0.06); g.gain.linearRampToValueAtTime(0.025,t+i*dur+dur*0.45); g.gain.exponentialRampToValueAtTime(0.001,t+i*dur+dur*0.85);
+      o.connect(g); g.connect(this.bgmGain); o.start(t+i*dur); o.stop(t+i*dur+dur);
+      this.bgmNodes.push(o);
+    });
+    this.bgmTimer = setTimeout(() => this._bgmLoop(), notes.length*dur*1000);
+  }
+  stopBGM() {
+    clearTimeout(this.bgmTimer);
+    this.bgmNodes.forEach(n => { try{n.stop()}catch(e){} });
+    this.bgmNodes = [];
+  }
+}
+
+// ==================== 关卡生成器 ====================
+const COLS = [
+  {n:'red',    f:'#e94560', g:'#ff6b6b', d:'#a71d3a'},
+  {n:'blue',   f:'#4d96ff', g:'#6db3ff', d:'#1a56b8'},
+  {n:'green',  f:'#2ecc71', g:'#58d68d', d:'#1a7a3a'},
+  {n:'yellow', f:'#f1c40f', g:'#f9e154', d:'#b8960a'},
+  {n:'purple', f:'#9b59b6', g:'#bb8fce', d:'#6c3483'},
+  {n:'orange', f:'#e67e22', g:'#f0a04b', d:'#a05517'},
+];
+
+function genLevel(lv) {
+  const numCol = Math.min(2 + Math.floor((lv-1)/3), 6);
+  const cap = numCol === 2 ? 4 : 3; // 2色时每盒4个，否则3个
+  const total = numCol * cap;
+  const numPanel = Math.min(3 + Math.floor(lv/2), 10);
+  const colors = COLS.slice(0, numCol);
+
+  // 生成颜色分布
+  const screwCols = [];
+  colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
+  shuffle(screwCols);
+
+  // 面板区域: 画布 420×700，游戏区 xywh
+  const GX=30, GY=130, GW=360, GH=340;
+
+  // 生成面板 — 随机位置，有重叠
+  const panels = [];
+  for (let i = 0; i < numPanel; i++) {
+    const pw = 70 + Math.random() * 80;
+    const ph = 50 + Math.random() * 60;
+    const cx = GX + 30 + Math.random() * (GW - 60);
+    const cy = GY + 30 + Math.random() * (GH - 80);
+    panels.push({ id:i, cx, cy, w:pw, h:ph, screws:[], dropped:false, wobble:false,
+      color:['#e8d5b7','#d4c0a0','#c9b99a','#bfaa88','#dcc8a8'][i%5],
+      layer: i // 编号越大越上层
+    });
+  }
+
+  // 按 layer 排序后分配层级（后创建的在上层）
+  panels.sort((a,b) => a.layer - b.layer);
+  panels.forEach((p,i) => { p.layer = i; });
+
+  // 分配螺丝
+  let si = 0;
+  panels.forEach(p => {
+    const need = Math.min(2 + Math.floor(si / total * 2), total - si);
+    if (need <= 0) return;
+    for (let i = 0; i < need && si < total; i++) {
+      const offX = (i%2===0?-1:1) * p.w * 0.28;
+      const offY = (i<2?-1:1) * p.h * 0.22;
+      p.screws.push({
+        id: si,
+        color: screwCols[si],
+        x: p.cx + offX,
+        y: p.cy + offY,
+        panelId: p.id,
+        removed: false,
+        animT: 0,
+      });
+      si++;
+    }
+  });
+
+  // 剩余螺丝挂在随机面板上
+  while (si < total) {
+    const p = panels[Math.floor(Math.random() * panels.length)];
+    const cnt = p.screws.length;
+    p.screws.push({
+      id: si,
+      color: screwCols[si],
+      x: p.cx + (cnt%2===0?-1:1)*p.w*0.15,
+      y: p.cy + (cnt<2?p.h*0.18:-p.h*0.15),
+      panelId: p.id,
+      removed: false,
+      animT: 0,
+    });
+    si++;
+  }
+
+  const allScrews = panels.flatMap(p => p.screws);
+
+  // 收纳盒队列
+  const boxes = [];
+  colors.forEach(c => { boxes.push(c); });
+  shuffle(boxes);
+
+  return {
+    level: lv, colors, panels, screws: allScrews, boxes,
+    cap, tempMax: 5 + Math.floor((lv-1)/8),
+    activeBox: boxes.shift(),
+    activeCount: 0,
+    temp: [],
+  };
+}
+
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+}
+
+// ==================== 游戏 ====================
+class Game {
+  constructor() {
+    this.cvs = document.getElementById('gc');
+    this.ctx = this.cvs.getContext('2d');
+    this.audio = new Audio();
+    this.st = null;
+    this.ps = [];   // particles
+    this.hist = []; // undo history
+    this.hinted = null;
+    this.paused = false;
+    this.busy = false;
+    this._size();
+    window.addEventListener('resize', () => this._size());
+    this.cvs.addEventListener('click', e => this._tap(e));
+    this.cvs.addEventListener('touchstart', e => { e.preventDefault(); this._tap(e.touches[0]); }, {passive:false});
+    this._loop();
+  }
+
+  _size() {
+    const r = this.cvs.getBoundingClientRect();
+    this.W = r.width; this.H = r.height;
+    this.cvs.width = r.width * (devicePixelRatio||1);
+    this.cvs.height = r.height * (devicePixelRatio||1);
+    this.S = this.cvs.width / r.width; // 缩放比
+  }
+
+  // ===== 关卡 =====
+  start(lv) {
+    this.st = genLevel(lv);
+    this.ps = [];
+    this.hist = [];
+    this.hinted = null;
+    this.busy = false;
+    this.paused = false;
+    hideAll();
+    document.getElementById('lv').textContent = `第 ${lv} 关`;
+    this.audio.bgm();
+  }
+
+  next() {
+    this.start(this.st.level + 1);
+  }
+
+  restart() {
+    this.start(this.st.level);
+  }
+
+  pause() {
+    this.paused = true;
+    document.getElementById('ovPause').classList.remove('hidden');
+  }
+
+  resume() {
+    this.paused = false;
+    document.getElementById('ovPause').classList.add('hidden');
+  }
+
+  sound() {
+    this.audio.on = !this.audio.on;
+    document.getElementById('btnSound').textContent = this.audio.on ? '🔊' : '🔇';
+    if (!this.audio.on) this.audio.stopBGM(); else this.audio.bgm();
+  }
+
+  // ===== 核心 =====
+  _tap(e) {
+    if (this.paused || this.busy || !this.st) return;
+    const mx = (e.clientX - this.cvs.getBoundingClientRect().left);
+    const my = (e.clientY - this.cvs.getBoundingClientRect().top);
+
+    const st = this.st;
+    let best = null, bestD = Infinity;
+    for (const s of st.screws) {
+      if (s.removed) continue;
+      const p = st.panels.find(p => p.id === s.panelId);
+      if (p && !p.dropped && this._blocked(p)) continue;
+      const dx = mx - s.x, dy = my - s.y;
+      const d = dx*dx + dy*dy;
+      if (d < 600 && d < bestD) { best = s; bestD = d; }
+    }
+    if (best) this._remove(best);
+  }
+
+  _blocked(panel) {
+    // 面板被上层未掉落面板遮挡
+    for (const p of this.st.panels) {
+      if (p.id === panel.id || p.dropped) continue;
+      if (p.layer > panel.layer && this._overlap(p, panel)) return true;
+    }
+    return false;
+  }
+
+  _overlap(a, b) {
+    return !(a.cx-a.w/2 > b.cx+b.w/2 || a.cx+a.w/2 < b.cx-b.w/2 ||
+             a.cy-a.h/2 > b.cy+b.h/2 || a.cy+a.h/2 < b.cy-b.h/2);
+  }
+
+  _remove(screw) {
+    const st = this.st;
+    this.busy = true;
+    this.audio.play('unscrew');
+    this.ps.push(...sparks(screw.x, screw.y, screw.color.f, 10));
+
+    // 保存历史
+    this.hist.push({
+      sid: screw.id,
+      box: st.activeBox ? {...st.activeBox} : null,
+      cnt: st.activeCount,
+      queue: [...st.boxes],
+      temp: st.temp.map(t => ({...t})),
+    });
+
+    // 拧螺丝动画
+    this._animUn(screw, () => {
+      screw.removed = true;
+      this.busy = false;
+      this._place(screw);
+    });
+  }
+
+  _place(screw) {
+    const st = this.st;
+    const c = screw.color;
+
+    if (st.activeBox && st.activeBox.n === c.n) {
+      st.activeCount++;
+      this.audio.play('boxIn');
+      this.ps.push(...sparks(screw.x, screw.y, c.g, 6));
+      if (st.activeCount >= st.cap) {
+        this.audio.play('boxFull');
+        this.ps.push(...burst(210, 65, c.g, 18));
+        st.activeBox = st.boxes.length > 0 ? st.boxes.shift() : null;
+        st.activeCount = 0;
+        this._autoMatch();
+      }
+    } else {
+      if (st.temp.length >= st.tempMax) {
+        this.audio.play('lose');
+        setTimeout(() => document.getElementById('ovLose').classList.remove('hidden'), 400);
+        return;
+      }
+      st.temp.push({ color: c });
+      this.audio.play('boxIn');
+    }
+
+    this._checkPanels();
+    if (st.screws.every(s => s.removed)) {
+      setTimeout(() => this._win(), 500);
+    }
+  }
+
+  _autoMatch() {
+    const st = this.st;
+    if (!st.activeBox) return;
+    for (let i = st.temp.length-1; i >= 0; i--) {
+      if (st.temp[i].color.n === st.activeBox.n) {
+        st.temp.splice(i, 1);
+        st.activeCount++;
+        this.audio.play('boxIn');
+        if (st.activeCount >= st.cap) {
+          this.audio.play('boxFull');
+          this.ps.push(...burst(210, 65, st.activeBox.g, 14));
+          st.activeBox = st.boxes.length > 0 ? st.boxes.shift() : null;
+          st.activeCount = 0;
+          if (!st.activeBox) break;
+        }
+      }
+    }
+  }
+
+  _checkPanels() {
+    for (const p of this.st.panels) {
+      if (p.dropped) continue;
+      const remain = p.screws.filter(s => !s.removed).length;
+      if (remain === 0) {
+        p.dropped = true;
+        this.audio.play('panelDrop');
+        this.ps.push(...panelBurst(p));
+      } else if (remain === 1 && !p.wobble) {
+        p.wobble = true;
+        this.audio.play('panelWobble');
+      }
+    }
+  }
+
+  _win() {
+    this.audio.play('win');
+    const st = this.st;
+    const undos = this.hist.length;
+    let stars = 3;
+    if (undos > st.screws.length * 0.35) stars = 2;
+    if (undos > st.screws.length * 0.7) stars = 1;
+    document.getElementById('starsShow').textContent = '⭐'.repeat(stars)+'☆'.repeat(3-stars);
+    document.getElementById('winMsg').textContent = `第 ${st.level} 关完成！撤销 ${undos} 次`;
+    document.getElementById('ovWin').classList.remove('hidden');
+    // 胜利烟花
+    for (let i=0;i<40;i++) {
+      setTimeout(() => {
+        this.ps.push(...burst(60+Math.random()*300, 100+Math.random()*400, COLS[Math.floor(Math.random()*6)].g, 8));
+      }, i*30);
+    }
+  }
+
+  undo() {
+    if (this.busy || this.hist.length === 0) return;
+    const rec = this.hist.pop();
+    const s = this.st.screws.find(s => s.id === rec.sid);
+    if (!s) return;
+    s.removed = false;
+    this.st.activeBox = rec.box;
+    this.st.activeCount = rec.cnt;
+    this.st.boxes = rec.queue;
+    this.st.temp = rec.temp;
+    this.audio.play('click');
+  }
+
+  hint() {
+    if (this.busy || !this.st) return;
+    const st = this.st;
+    let best = null;
+    for (const s of st.screws) {
+      if (s.removed) continue;
+      const p = st.panels.find(p => p.id === s.panelId);
+      if (p && !p.dropped && this._blocked(p)) continue;
+      if (st.activeBox && s.color.n === st.activeBox.n) { best = s; break; }
+      if (!best) best = s;
+    }
+    if (best) {
+      this.hinted = best;
+      this.audio.play('hint');
+      setTimeout(() => { this.hinted = null; }, 1800);
+    }
+  }
+
+  // ===== 动画 =====
+  _animUn(screw, cb) {
+    const dur = 16;
+    let f = 0;
+    const sx = screw.x, sy = screw.y;
+    const step = () => {
+      f++;
+      screw.animT = f / dur;
+      screw.animX = sx;
+      screw.animY = sy - 35 * screw.animT;
+      screw.animR = screw.animT * Math.PI * 2.5;
+      if (f >= dur) { screw.animT = 1; cb(); }
+      else requestAnimationFrame(step);
+    };
+    step();
+  }
+
+  // ===== 渲染 =====
+  _loop() {
+    this._draw();
+    requestAnimationFrame(() => this._loop());
+  }
+
+  _draw() {
+    const ctx = this.ctx, W = this.W, H = this.H, S = this.S;
+    ctx.clearRect(0, 0, this.cvs.width, this.cvs.height);
+
+    // 背景
+    ctx.fillStyle = '#12122a';
+    ctx.fillRect(0, 0, this.cvs.width, this.cvs.height);
+    // 网格
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+    ctx.lineWidth = 0.5;
+    for (let x=0;x<W;x+=28){ctx.beginPath();ctx.moveTo(x*S,0);ctx.lineTo(x*S,H*S);ctx.stroke();}
+    for (let y=0;y<H;y+=28){ctx.beginPath();ctx.moveTo(0,y*S);ctx.lineTo(W*S,y*S);ctx.stroke();}
+
+    ctx.save();
+    ctx.scale(S, S);
+
+    const st = this.st;
+    if (!st) { ctx.restore(); return; }
+
+    // 游戏区背景
+    const GX=30, GY=130, GW=360, GH=340;
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    rrect(ctx, GX, GY, GW, GH, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    rrect(ctx, GX, GY, GW, GH, 16);
+    ctx.stroke();
+
+    // 面板 — 按 layer 升序（底层先画）
+    const panels = [...st.panels].sort((a,b) => a.layer - b.layer);
+    for (const p of panels) {
+      if (p.dropped) continue;
+      this._drawPanel(ctx, p);
+    }
+
+    // 螺丝
+    for (const s of st.screws) {
+      if (s.removed) continue;
+      let sx = s.x, sy = s.y, rot = 0;
+      if (s.animT > 0 && s.animT < 1) {
+        sx = s.animX; sy = s.animY; rot = s.animR;
+      }
+      this._drawScrew(ctx, sx, sy, s.color, s === this.hinted, rot);
+    }
+
+    // 顶部收纳区
+    this._drawBoxes(ctx, st);
+
+    // 临时存放区（底部）
+    this._drawTemp(ctx, st);
+
+    // 粒子
+    for (const p of this.ps) {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // 更新粒子
+    this.ps = this.ps.filter(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= p.decay;
+      return p.life > 0;
+    });
+  }
+
+  _drawPanel(ctx, p) {
+    if (p.wobble) ctx.save();
+    if (p.wobble) {
+      const wb = Math.sin(Date.now()/130) * 2.5;
+      ctx.translate(wb, 0);
+    }
+
+    // 阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    rrect(ctx, p.cx-p.w/2+2, p.cy-p.h/2+2, p.w, p.h, 9);
+    ctx.fill();
+
+    // 面板主体
+    const grad = ctx.createLinearGradient(p.cx-p.w/2, p.cy-p.h/2, p.cx+p.w/2, p.cy+p.h/2);
+    grad.addColorStop(0, p.color);
+    grad.addColorStop(0.45, lighten(p.color, 18));
+    grad.addColorStop(1, p.color);
+    ctx.fillStyle = grad;
+    rrect(ctx, p.cx-p.w/2, p.cy-p.h/2, p.w, p.h, 9);
+    ctx.fill();
+
+    // 边框
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1.3;
+    rrect(ctx, p.cx-p.w/2, p.cy-p.h/2, p.w, p.h, 9);
+    ctx.stroke();
+
+    // 木纹
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.8;
+    for (let i=-p.h/2+14; i<p.h/2; i+=18) {
+      ctx.beginPath();
+      ctx.moveTo(p.cx-p.w/2+6, p.cy+i);
+      ctx.quadraticCurveTo(p.cx, p.cy+i+2, p.cx+p.w/2-6, p.cy+i);
+      ctx.stroke();
+    }
+
+    if (p.wobble) ctx.restore();
+  }
+
+  _drawScrew(ctx, x, y, col, hint, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (rot) ctx.rotate(-rot);
+
+    const r = 11;
+    if (hint) {
+      const pulse = Math.sin(Date.now()/180)*0.35+0.65;
+      ctx.shadowColor = col.g;
+      ctx.shadowBlur = 22 * pulse;
+    }
+
+    // 六角形
+    ctx.beginPath();
+    for (let i=0;i<6;i++) {
+      const a = Math.PI/6 + i*Math.PI/3;
+      const px = r*Math.cos(a), py = r*Math.sin(a);
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.closePath();
+
+    const grad = ctx.createRadialGradient(-1.5,-2, r*0.08, 0,0, r*1.15);
+    grad.addColorStop(0, lighten(col.f, 45));
+    grad.addColorStop(0.35, col.f);
+    grad.addColorStop(1, col.d);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    // 十字槽
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(-4.5,0); ctx.lineTo(4.5,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-4.5); ctx.lineTo(0,4.5); ctx.stroke();
+
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(-1.5,-2.5, 2.2, 0, Math.PI*2); ctx.fill();
+
+    if (hint) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.5+Math.sin(Date.now()/200)*0.3})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 3]);
+      ctx.lineDashOffset = -Date.now()/80;
+      ctx.beginPath(); ctx.arc(0,0,r+5,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+  }
+
+  _drawBoxes(ctx, st) {
+    if (!st.activeBox) return;
+    const Y = 62, BW = 52, BH = 36;
+
+    // 背景条
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    rrect(ctx, 24, Y-6, 372, BH+16, 12);
+    ctx.fill();
+
+    // 标签
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '10px "PingFang SC","Microsoft YaHei"';
+    ctx.textAlign = 'center';
+    ctx.fillText('当前收纳盒', 210, Y-2);
+
+    // 当前盒子
+    const bx = 175, by = Y+6;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    rrect(ctx, bx-2, by-2, BW+4, BH+4, 9);
+    ctx.fill();
+    ctx.strokeStyle = st.activeBox.g;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = st.activeBox.g;
+    ctx.shadowBlur = 8;
+    rrect(ctx, bx-2, by-2, BW+4, BH+4, 9);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const g2 = ctx.createLinearGradient(bx, by, bx, by+BH);
+    g2.addColorStop(0, st.activeBox.f);
+    g2.addColorStop(1, st.activeBox.d);
+    ctx.fillStyle = g2;
+    rrect(ctx, bx, by, BW, BH, 7);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 1;
+    rrect(ctx, bx, by, BW, BH, 7);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei"';
+    ctx.fillText(`${st.activeCount}/${st.cap}`, bx+BW/2, by+BH/2+5);
+
+    // 预览下一个
+    if (st.boxes.length > 0) {
+      const nx = 254, ny = by;
+      ctx.fillStyle = st.boxes[0].f;
+      rrect(ctx, nx, ny+2, 26, BH-4, 6);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = '9px "PingFang SC","Microsoft YaHei"';
+      ctx.fillText('下一个', nx+13, ny-8);
+      // 更多
+      if (st.boxes.length > 1) {
+        ctx.fillText(`+${st.boxes.length-1}`, nx+42, ny+BH/2+4);
+      }
+    }
+  }
+
+  _drawTemp(ctx, st) {
+    const tx = (420 - st.tempMax * 44) / 2, ty = 520;
+    for (let i=0;i<st.tempMax;i++) {
+      const x = tx + i*44, y = ty;
+      if (i < st.temp.length) {
+        const c = st.temp[i].color;
+        ctx.fillStyle = c.f;
+        rrect(ctx, x, y, 38, 38, 9);
+        ctx.fill();
+        ctx.strokeStyle = c.g;
+        ctx.lineWidth = 1.5;
+        rrect(ctx, x, y, 38, 38, 9);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4,3]);
+        rrect(ctx, x, y, 38, 38, 9);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    // 标签
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '10px "PingFang SC","Microsoft YaHei"';
+    ctx.textAlign = 'center';
+    ctx.fillText('临时存放', 210, ty-8);
+  }
+}
+
+// ===== 辅助函数 =====
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+function lighten(hex, pct) {
+  const n = parseInt(hex.replace('#',''),16);
+  const a = Math.round(2.55*pct);
+  const R = Math.min(255,(n>>16)+a), G = Math.min(255,(n>>8&0xFF)+a), B = Math.min(255,(n&0xFF)+a);
+  return `rgb(${R},${G},${B})`;
+}
+
+function sparks(x, y, color, n) {
+  const a = [];
+  for (let i=0;i<n;i++) {
+    const ang = Math.random()*Math.PI*2;
+    const spd = 1+Math.random()*3;
+    a.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,decay:.025+Math.random()*.04,size:1.5+Math.random()*2.5,color});
+  }
+  return a;
+}
+
+function burst(x, y, color, n) {
+  const a = [];
+  for (let i=0;i<n;i++) {
+    const ang = Math.random()*Math.PI*2;
+    const spd = 2+Math.random()*5;
+    a.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-1.5,life:1,decay:.018+Math.random()*.03,size:2+Math.random()*4,color});
+  }
+  return a;
+}
+
+function panelBurst(p) {
+  const a = [];
+  for (let i=0;i<18;i++) {
+    a.push({
+      x: p.cx+(Math.random()-.5)*p.w,
+      y: p.cy+(Math.random()-.5)*p.h,
+      vx: (Math.random()-.5)*5,
+      vy: (Math.random()-.5)*5+2,
+      life: 1,
+      decay: .014+Math.random()*.025,
+      size: 2.5+Math.random()*4.5,
+      color: p.color,
+    });
+  }
+  return a;
+}
+
+function hideAll() {
+  ['ovStart','ovWin','ovLose','ovPause'].forEach(id => document.getElementById(id).classList.add('hidden'));
+}
+
+// ===== 启动 =====
+const G = new Game();
+</script>
+</body>
+</html>
