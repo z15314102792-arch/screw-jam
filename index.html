@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v3.0</title>
+<title>螺丝消除 v3.1</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -160,6 +160,7 @@ class Audio {
   bgm() { if (this.on && this.ctx) { this.stopBGM(); this._bgmLoop(); } }
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
+    this._bgmNodes = [];
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
     // 舒缓氛围 — 慢板五声音阶 + 温暖铺底，放松不头疼
     // Am 五声：A4 C5 D5 E5 G5 A5 (440-880Hz)
@@ -285,12 +286,14 @@ function genLevel(lv) {
   const GX=30, GY=130, GW=360, GH=340;
 
   let attempts = 0;
-  while (attempts < 150) {
+  while (attempts < 300) {
     attempts++;
     const result = _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
     if (result && _isSolvable(result)) return result;
   }
-  return _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
+  // 兜底：增加tempMax降低难度再试
+  const fallback = _tryGen(lv, colors, cap, total, numPanel, tempMax + 2, GX, GY, GW, GH);
+  return fallback;
 }
 
 function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
@@ -308,7 +311,7 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   for (let i = 0; i < numPanel; i++) {
     const pw = 75 + Math.random() * 85;
     const ph = 52 + Math.random() * 62;
-    const spreadX = GW * 0.22, spreadY = GH * 0.20; // 更集中 → 更多重叠
+    const spreadX = GW * 0.42, spreadY = GH * 0.38;
     const cx = GX + GW/2 + (Math.random() - 0.5) * spreadX;
     const cy = GY + GH/2 + (Math.random() - 0.5) * spreadY;
     const wood = WOODS[i % WOODS.length];
@@ -317,8 +320,8 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
       wood, layer:i, _physAngle:0, _pivotX:null, _pivotY:null, _targetAngle:0
     });
   }
-  // ★ 空间层级：Y坐标越小（越靠上）→ 层号越大（后画=在上层）
-  panels.sort((a,b) => a.cy - b.cy);
+  // 层级按创建顺序（后续螺丝放置会确保覆盖关系）
+  panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
   // 4. 分配每板螺丝数（每板至少1颗，最多4颗，优先给重叠多的板）
@@ -452,15 +455,46 @@ function _isSolvable(st) {
     const p = panels.find(p => p.id === screw.panelId);
     if (!p || p.dropped) return false;
     for (const op of panels) {
-      if (op.id === p.id || op.dropped) continue;
+      if (op.id === p.id || op.dropped || op.dropStart) continue;
       if (op.layer > p.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, screw.x, screw.y)) return true;
     }
     return false;
   };
   let stuck = 0;
-  while (screws.some(s=>!s.removed) && stuck < screws.length*3) {
+  while (screws.some(s=>!s.removed) && stuck < screws.length * 5) {
     let found = null;
+    // 优先匹配当前盒子颜色
     for (const s of screws) { if (s.removed || blocked(s)) continue; if (activeBox&&s.color.n===activeBox.n){found=s;break;} }
+    // 卡住时：尝试取一颗会释放最多螺丝的面板上的螺丝
+    if (!found && stuck > screws.length) {
+      let bestScore = -1;
+      for (const s of screws) {
+        if (s.removed || blocked(s)) continue;
+        const p = panels.find(pp => pp.id === s.panelId);
+        if (!p || p.dropped) continue;
+        // 评估：取这颗螺丝能释放多少被它面板挡住的螺丝
+        let unlocks = 0;
+        const savedDropped = p.dropped;
+        p.dropped = true; // 模拟面板掉落
+        for (const os of screws) {
+          if (os.removed || os.id === s.id) continue;
+          if (blocked(os)) continue; // 不计数仍然blocked的
+          const wasBlocked = (() => {
+            const op = panels.find(pp => pp.id === os.panelId);
+            if (!op || op.dropped) return false;
+            for (const hp of panels) {
+              if (hp.id === op.id || hp.dropped) continue;
+              if (hp.layer > op.layer && shapeContains(hp.cx, hp.cy, hp.w, hp.h, hp.shape, os.x, os.y)) return true;
+            }
+            return false;
+          })();
+          if (!wasBlocked) unlocks++;
+        }
+        p.dropped = savedDropped;
+        if (unlocks > bestScore) { bestScore = unlocks; found = s; }
+      }
+    }
+    // 实在找不到，随便取一颗可达的
     if (!found) { for (const s of screws) { if (s.removed||blocked(s)) continue; found=s;break; } }
     if (!found) { stuck++; continue; }
     found.removed = true;
@@ -513,7 +547,7 @@ class Game {
     this._seed = this._deepClone(this.st);
     this.ps=[]; this.hist=[]; this.hinted=null; this.busy=false; this.paused=false;
     this._autoClearing=false; this._flyAuto=[];
-    this.shakeX=0; this.shakeDur=0; this.shakeStart=null;
+    
     this.st.combo=0; this.st.comboTime=0; this.st.boxGlow=null;
     hideAll();
     document.getElementById('lv').textContent = '第 '+lv+' 关';
@@ -527,7 +561,7 @@ class Game {
       this.st = this._deepClone(this._seed);
       this.ps=[]; this.hist=[]; this.hinted=null; this.busy=false; this.paused=false;
       this._autoClearing=false; this._flyAuto=[];
-      this.shakeX=0; this.shakeDur=0; this.shakeStart=null;
+      
       this.st.combo=0; this.st.comboTime=0; this.st.boxGlow=null;
       hideAll();
       document.getElementById('lv').textContent = '第 '+this.st.level+' 关';
@@ -564,7 +598,7 @@ class Game {
     const panel = this.st.panels.find(p => p.id === screw.panelId);
     if (!panel || panel.dropped) return false;
     for (const op of this.st.panels) {
-      if (op.id === panel.id || op.dropped) continue;
+      if (op.id === panel.id || op.dropped || op.dropStart) continue;
       if (op.layer > panel.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, screw.x, screw.y)) {
         return true;
       }
@@ -600,7 +634,7 @@ class Game {
 
   _getTarget(screw) {
     const st = this.st;
-    if (st.activeBox && st.activeBox.n === screw.color.n) return { x: 201, y: 82 };
+    if (st.activeBox && st.activeBox.n === screw.color.n) return { x: 201, y: 80 };
     const tx = (420 - st.tempMax * 44) / 2;
     const slotIdx = Math.min(st.temp.length, st.tempMax - 1);
     return { x: tx + slotIdx * 44 + 19, y: 540 };
@@ -878,11 +912,7 @@ class Game {
 
     const GX=30,GY=130,GW=360,GH=340;
 
-    let shakeX=0,shakeY=0;
-    if(this.shakeStart){const el=Date.now()-this.shakeStart;if(el<this.shakeDur){const d=1-el/this.shakeDur;shakeX=(Math.random()-.5)*this.shakeX*d;shakeY=(Math.random()-.5)*this.shakeX*d;}else this.shakeX=0;}
 
-    ctx.fillStyle=ctx.createRadialGradient(210,320,30,210,320,280);
-    ctx.fillStyle; // 重置
     const bgG=ctx.createRadialGradient(210,320,30,210,320,280);
     bgG.addColorStop(0,'rgba(100,150,200,0.06)'); bgG.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=bgG; ctx.fillRect(GX,GY,GW,GH);
@@ -897,7 +927,7 @@ class Game {
     const clipBottom=GY+GH;
     ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(GX,clipBottom); ctx.lineTo(GX+GW,clipBottom); ctx.stroke();
 
-    ctx.save(); ctx.translate(shakeX,shakeY);
+    ctx.save();
 
     ctx.save(); ctx.beginPath(); ctx.rect(GX-40,GY-40,GW+80,GH+140); ctx.clip();
 
@@ -923,7 +953,7 @@ class Game {
 
         if(!this._isScrewBlocked(s)){
           // 螺丝露在外面 → 正常颜色可操作
-          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
+          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc);
         } else {
           // 螺丝被上层板盖住 → 半透明 ghost
           ctx.save();
@@ -944,7 +974,7 @@ class Game {
       if(s.animPhase==='unscrewing'&&s.animT<1){sx=s.animX;sy=s.animY;rot=s.animR;sc=s.clickScale||1;}
       else if(s.animPhase==='flying'){sx=s.flyX;sy=s.flyY;rot=s.flyR;sc=s.flyScale;}
       else if(s.clickScale&&s.clickScale<1)sc=s.clickScale;
-      this._drawScrew(ctx,sx,sy,s.color,s===this.hinted,rot,sc,false);
+      this._drawScrew(ctx,sx,sy,s.color,s===this.hinted,rot,sc);
     }
 
     ctx.restore(); // 解除蒙版
@@ -955,7 +985,7 @@ class Game {
       const ease=1-Math.pow(1-t2,3), arc=Math.sin(t2*Math.PI)*70;
       const sx=fs.x+(fs.tx-fs.x)*ease, sy=fs.y+(fs.ty-fs.y)*ease-arc;
       const sc2=Math.max(0.7, 1-t2*0.3), rot2=t2*Math.PI*1.5;
-      this._drawScrew(ctx,sx,sy,fs.color,false,rot2,sc2,false);
+      this._drawScrew(ctx,sx,sy,fs.color,false,rot2,sc2);
       if(fs.frame%2===0)this.ps.push({x:sx+(Math.random()-.5)*8,y:sy+(Math.random()-.5)*8,vx:(Math.random()-.5)*1.5,vy:(Math.random()-.5)*1.5,life:.6,decay:.05,size:2+Math.random()*3,color:fs.color.g});
     }
 
@@ -1072,7 +1102,7 @@ class Game {
     ctx.restore();
   }
 
-  _drawScrew(ctx, x, y, col, hint, rot, scale, blocked) {
+  _drawScrew(ctx, x, y, col, hint, rot, scale) {
     ctx.save(); ctx.translate(x,y);
     if(scale&&scale!==1)ctx.scale(scale,scale);
     if(rot)ctx.rotate(-rot);
@@ -1116,7 +1146,7 @@ class Game {
 
   // 纯螺丝绘制（无 save/restore/hint，供 ghost 层使用）
   _drawScrewRaw(ctx, x, y, col) {
-    ctx.translate(x, y);
+    ctx.save(); ctx.translate(x, y);
     const r = 12;
     ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.arc(1.5,2,r,0,Math.PI*2); ctx.fill();
     ctx.beginPath();
@@ -1135,7 +1165,7 @@ class Game {
     ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(-slotW,-slotL,0.6,slotL*2); ctx.fillRect(-slotL,-slotW,slotL*2,0.6);
     ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(-r*0.25,-r*0.35,r*0.28,r*0.2,-0.5,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.ellipse(r*0.2,r*0.3,r*0.35,r*0.12,0.3,0,Math.PI*2); ctx.fill();
-    ctx.translate(-x, -y);
+    ctx.restore();
   }
 
   _drawBoxes(ctx, st) {
