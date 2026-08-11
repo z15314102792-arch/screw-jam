@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v2.1</title>
+<title>螺丝消除 v2.2</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -103,9 +103,9 @@ class Audio {
       try {
         this.ctx = new (window.AudioContext||window.webkitAudioContext)();
         if (this.ctx.state === 'suspended') this.ctx.resume();
-        this.master = this.ctx.createGain(); this.master.gain.value = 0.8;
+        this.master = this.ctx.createGain(); this.master.gain.value = 0.85;
         this.master.connect(this.ctx.destination);
-        this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0.7;
+        this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0.9;
         this.bgmGain.connect(this.master);
       } catch(e) { this.on = false; }
     };
@@ -161,35 +161,39 @@ class Audio {
   _bgmLoop() {
     if (!this.on || !this.ctx) return;
     const ctx = this.ctx, t = this.t(), mg = this.bgmGain;
-    // 极简五声音阶 — 固定优美序列，零噪音
-    // Am 五声: A C D E G → 110 130.8 146.8 164.8 196 (低八度柔和)
-    const seq = [110, 130.8, 146.8, 164.8, 196, 164.8, 146.8, 130.8];
-    const noteLen = 3.2;
-    seq.forEach((freq, i) => {
-      const start = t + i * noteLen;
-      const o = ctx.createOscillator(); o.type = 'sine';
+    // 音乐盒风格 — 中高音、短促、有间隔、不持续（避免低频头疼）
+    // C大调五声音阶旋律 C5-E5-G5-A5-C6 (523-1047Hz)
+    const melody = [
+      523.2, 659.2, 784, 1047,  // C5 E5 G5 C6 ↑
+      784, 659.2, 523.2, 440,    // G5 E5 C5 A4 ↓
+      523.2, 587.3, 659.2, 784,  // C5 D5 E5 G5 ↑
+      659.2, 523.2, 440, 392,    // E5 C5 A4 G4 ↓
+    ];
+    const beat = 0.55; // 轻快节奏
+    melody.forEach((freq, i) => {
+      const start = t + i * beat + (Math.random() - 0.5) * 0.04; // 微妙人性化
+      const o = ctx.createOscillator(); o.type = 'triangle';
       o.frequency.setValueAtTime(freq, start);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, start);
-      g.gain.linearRampToValueAtTime(0.2, start + 0.8);
-      g.gain.setValueAtTime(0.2, start + noteLen * 0.6);
-      g.gain.linearRampToValueAtTime(0, start + noteLen * 0.9);
+      g.gain.linearRampToValueAtTime(0.40, start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, start + 0.38);
       o.connect(g); g.connect(mg);
-      o.start(start); o.stop(start + noteLen);
+      o.start(start); o.stop(start + 0.4);
       this._bgmNodes.push(o);
     });
-    // 超低频底音 A2
-    const bo = ctx.createOscillator(); bo.type = 'sine';
-    bo.frequency.setValueAtTime(110, t);
-    const bg = ctx.createGain();
-    bg.gain.setValueAtTime(0, t);
-    bg.gain.linearRampToValueAtTime(0.15, t + 1.2);
-    bg.gain.setValueAtTime(0.15, t + seq.length * noteLen * 0.75);
-    bg.gain.linearRampToValueAtTime(0, t + seq.length * noteLen * 0.93);
-    bo.connect(bg); bg.connect(mg);
-    bo.start(t); bo.stop(t + seq.length * noteLen);
-    this._bgmNodes.push(bo);
-    this._bgmTimer = setTimeout(() => this._bgmLoop(), seq.length * noteLen * 1000);
+    // 轻柔背景泛音（高八度，极淡）
+    const ho = ctx.createOscillator(); ho.type = 'sine';
+    ho.frequency.setValueAtTime(1047, t); // C6
+    const hg = ctx.createGain();
+    hg.gain.setValueAtTime(0, t);
+    hg.gain.linearRampToValueAtTime(0.06, t + 0.5);
+    hg.gain.setValueAtTime(0.06, t + melody.length * beat * 0.7);
+    hg.gain.linearRampToValueAtTime(0, t + melody.length * beat);
+    ho.connect(hg); hg.connect(mg);
+    ho.start(t); ho.stop(t + melody.length * beat);
+    this._bgmNodes.push(ho);
+    this._bgmTimer = setTimeout(() => this._bgmLoop(), melody.length * beat * 1000);
   }
   stopBGM() {
     clearTimeout(this._bgmTimer);
@@ -809,7 +813,8 @@ class Game {
     // 标记每个面板是否被遮挡
     for(const p of sortedPanels){if(p.dropped)continue;p._blocked=this._blocked(p);}
 
-    // ★ 首轮：逐层画面板 + 可操作螺丝
+    // ★ 单轮逐层渲染：螺丝绑定所在木板，不浮层
+    // 最上层（未遮挡）→ 螺丝正常色；被遮挡层 → 螺丝半透明附在木板层序内
     for(const p of sortedPanels){
       if(p.dropped)continue;
       const eps=0.003;
@@ -817,32 +822,25 @@ class Game {
       else p._physAngle+=(p._targetAngle-p._physAngle)*0.12;
 
       this._drawPanel(ctx, p, clipBottom);
-      if(!p._blocked){
-        for(const s of p.screws){
-          if(s.removed)continue;
-          if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
-          const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
-          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
-        }
-      }
-    }
 
-    // ★ 二轮：在所有面板上方画被遮螺丝（半透明完整螺丝，alpha 0.28）
-    for(const p of sortedPanels){
-      if(p.dropped||!p._blocked)continue;
       for(const s of p.screws){
         if(s.removed)continue;
         if(s.animPhase==='unscrewing'||s.animPhase==='flying')continue;
-        // 保存并设置全局透明度
-        ctx.save();
-        ctx.globalAlpha = 0.28;
-        // 画完整螺丝（含六角形、渐变、十字槽）
-        this._drawScrewRaw(ctx, s.x, s.y, s.color);
-        // 🔒 标记
-        ctx.globalAlpha = 0.6;
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('🔒', s.x, s.y);
-        ctx.restore();
+        const sc=(s.clickScale&&s.clickScale<1)?s.clickScale:1;
+
+        if(!p._blocked){
+          // 顶层：正常颜色螺丝
+          this._drawScrew(ctx, s.x, s.y, s.color, s===this.hinted, 0, sc, false);
+        } else {
+          // 被遮挡层：半透明 ghost，画在此板层序内，上层板会自然遮盖
+          ctx.save();
+          ctx.globalAlpha = 0.28;
+          this._drawScrewRaw(ctx, s.x, s.y, s.color);
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = '#444'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🔒', s.x, s.y);
+          ctx.restore();
+        }
       }
     }
 
