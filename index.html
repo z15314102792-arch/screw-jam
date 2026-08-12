@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="x5-page-mode" content="app"><meta name="x5-fullscreen" content="true"><meta name="x5-orientation" content="portrait">
 <meta name="browsermode" content="application"><meta name="full-screen" content="yes"><meta name="360-fullscreen" content="true">
-<title>螺丝消除 v3.2</title>
+<title>螺丝消除 v3.3</title>
 <script>
 (function(){
   document.addEventListener('touchmove',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA')e.preventDefault();},{passive:false});
@@ -286,10 +286,21 @@ function genLevel(lv) {
   const GX=30, GY=130, GW=360, GH=340;
 
   let attempts = 0;
+  const minCov = lv <= 3 ? 25 : lv <= 7 ? 35 : lv <= 13 ? 45 : 50;
   while (attempts < 300) {
     attempts++;
     const result = _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH);
-    if (result && _isSolvable(result)) return result;
+    if (result && _isSolvable(result)) {
+      let blocked = 0;
+      for (const s of result.screws) {
+        const sp = result.panels.find(p => p.id === s.panelId);
+        if (!sp || sp.dropped) continue;
+        if (result.panels.some(op => op.id !== sp.id && !op.dropped && op.layer > sp.layer &&
+          shapeContains(op.cx, op.cy, op.w, op.h, op.shape, s.x, s.y))) blocked++;
+      }
+      const cov = result.screws.length > 0 ? Math.round(blocked / result.screws.length * 100) : 0;
+      if (cov >= minCov) return result;
+    }
   }
   // 兜底：增加tempMax降低难度再试
   const fallback = _tryGen(lv, colors, cap, total, numPanel, tempMax + 2, GX, GY, GW, GH);
@@ -306,21 +317,37 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
   colors.forEach(c => { for(let i=0;i<cap;i++) screwCols.push(c); });
   shuffle(screwCols);
 
-  // 3. 创建面板（聚集中心确保层间重叠）
+  // 3. 锚点聚类面板布局 — 确保面板间有可靠重叠
   const panels = [];
+  const numAnchors = numPanel <= 5 ? 1 : numPanel <= 8 ? 2 : 3;
+  const anchorMargin = 70;
+  const anchors = [];
+  for (let a = 0; a < numAnchors; a++) {
+    anchors.push({
+      ax: GX + anchorMargin + (GW - 2*anchorMargin) * (a + 0.5) / numAnchors,
+      ay: GY + anchorMargin + (GH - 2*anchorMargin) * (0.35 + Math.random() * 0.3),
+    });
+  }
   for (let i = 0; i < numPanel; i++) {
     const pw = 75 + Math.random() * 85;
     const ph = 52 + Math.random() * 62;
-    const spreadX = GW * 0.42, spreadY = GH * 0.38;
-    const cx = GX + GW/2 + (Math.random() - 0.5) * spreadX;
-    const cy = GY + GH/2 + (Math.random() - 0.5) * spreadY;
+    const anchor = anchors[i % numAnchors];
+    const clusterIdx = Math.floor(i / numAnchors);
+    const clusterSize = Math.ceil(numPanel / numAnchors);
+    // 面板围绕锚点水平错位排列，垂直方向小随机偏移 → 确保重叠
+    const offsetX = (clusterIdx - (clusterSize-1)/2) * pw * 0.45;
+    const offsetY = (Math.random() - 0.5) * ph * 0.4;
+    let cx = anchor.ax + offsetX + (Math.random() - 0.5) * 25;
+    let cy = anchor.ay + offsetY + (Math.random() - 0.5) * 18;
+    cx = Math.max(GX + pw/2, Math.min(GX + GW - pw/2, cx));
+    cy = Math.max(GY + ph/2, Math.min(GY + GH - ph/2, cy));
     const wood = WOODS[i % WOODS.length];
     const shape = lv <= 1 ? SHAPE_RECT : ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)];
     panels.push({ id:i, cx, cy, w:pw, h:ph, shape, screws:[], dropped:false, wobble:false,
       wood, layer:i, _physAngle:0, _pivotX:null, _pivotY:null, _targetAngle:0
     });
   }
-  // 层级按创建顺序（后续螺丝放置会确保覆盖关系）
+  // 层级按创建顺序：先创建=底层，后创建=上层
   panels.sort((a,b) => a.layer - b.layer);
   panels.forEach((p,i) => { p.layer = i; });
 
@@ -367,9 +394,24 @@ function _tryGen(lv, colors, cap, total, numPanel, tempMax, GX, GY, GW, GH) {
               pos = { x: t.x, y: t.y };
             }
           } else {
-            // 无可覆盖目标 → 均匀散布（保底）
-            pos = screwSpreadPos(p, k, screwCounts[p.id]);
-          }
+            // 无可覆盖目标 → 强制在重叠区域放置
+            const ovPanels = panels.filter(lp => lp.layer < p.layer && !lp.dropped && _overlap(p, lp));
+            if (ovPanels.length > 0) {
+              const lp = ovPanels[Math.floor(Math.random() * ovPanels.length)];
+              const candidates = lp.screws.filter(s => !s.removed);
+              if (candidates.length > 0) {
+                const ref = candidates[Math.floor(Math.random() * candidates.length)];
+                const px = ref.x + (Math.random() - 0.5) * 16;
+                const py = ref.y + (Math.random() - 0.5) * 16;
+                pos = shapeContains(p.cx, p.cy, p.w, p.h, p.shape, px, py)
+                  ? {x: px, y: py} : {x: ref.x, y: ref.y};
+              } else {
+                pos = screwSpreadPos(p, k, screwCounts[p.id]);
+              }
+            } else {
+              pos = screwSpreadPos(p, k, screwCounts[p.id]);
+            }
+        }
         }
         const col = assignColor(screwCols, si, p, panels, firstBoxN, total);
         p.screws.push({ id: si, color: col, x: pos.x, y: pos.y, panelId: p.id, removed: false });

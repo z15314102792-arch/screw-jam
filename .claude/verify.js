@@ -120,49 +120,96 @@ addCheck('关卡可解性 (30关×3轮)', totalSolvable === totalTests, {
   total_attempts: totalTests, solvable: totalSolvable, failed: totalTests - totalSolvable, solvable_rate_pct: solvableRate,
 });
 
-// ====== 5. 螺丝遮盖统计 ======
-console.log('[verify] 统计螺丝遮盖率...');
-const coverageData = [], openCounts = [];
+// ====== 5. 螺丝遮盖率稳定性（10次×30关，契约 M1/M2/M3） ======
+console.log('[verify] 统计螺丝遮盖率稳定性 (10次×30关)...');
+const coverageRounds = 10;
+const allSamples = [], openCounts = []; // { level, coverage_pct } × 10 per level
+const coverageByLevel = {}; // level -> [coverage_pct, ...]
 
 for (let lv = 1; lv <= LEVELS; lv++) {
-  try {
-    const st = genLevel(lv);
-    if (!st || !st.screws || !st.panels) continue;
-    st.screws.forEach(s => { s.removed = false; s.animPhase = null; });
-    st.panels.forEach(p => { p.dropped = false; p.dropStart = null; });
+  coverageByLevel[lv] = [];
+  for (let r = 0; r < coverageRounds; r++) {
+    try {
+      const st = genLevel(lv);
+      if (!st || !st.screws || !st.panels) continue;
+      st.screws.forEach(s => { s.removed = false; s.animPhase = null; });
+      st.panels.forEach(p => { p.dropped = false; p.dropStart = null; });
 
-    let blocked = 0, open = 0;
-    for (const s of st.screws) {
-      const panel = st.panels.find(p => p.id === s.panelId);
-      if (!panel || panel.dropped) { open++; continue; }
-      let isBlocked = false;
-      for (const op of st.panels) {
-        if (op.id === panel.id || op.dropped) continue;
-        if (op.layer > panel.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, s.x, s.y)) { isBlocked = true; break; }
+      let blocked = 0;
+      for (const s of st.screws) {
+        const panel = st.panels.find(p => p.id === s.panelId);
+        if (!panel || panel.dropped) continue;
+        for (const op of st.panels) {
+          if (op.id === panel.id || op.dropped) continue;
+          if (op.layer > panel.layer && shapeContains(op.cx, op.cy, op.w, op.h, op.shape, s.x, s.y)) { blocked++; break; }
+        }
       }
-      if (isBlocked) blocked++; else open++;
-    }
-    const total = blocked + open;
-    coverageData.push({ level: lv, total, blocked, open, coverage_pct: total > 0 ? Math.round((blocked / total) * 100) : 0 });
-    openCounts.push(open);
-  } catch(e) { /* skip */ }
+      const total = st.screws.length;
+      const cov = total > 0 ? Math.round((blocked / total) * 100) : 0;
+      allSamples.push({ level: lv, round: r, total, blocked, coverage_pct: cov });
+      coverageByLevel[lv].push(cov);
+      if (r === 0) openCounts.push(total - blocked);
+    } catch(e) { /* skip */ }
+  }
 }
 
-if (coverageData.length > 0) {
-  const sorted = coverageData.map(d => d.coverage_pct).sort((a, b) => a - b);
+// M1: 同级稳定性 — 每关标准差最大值 ≤ 25
+const stddevs = [];
+for (let lv = 1; lv <= LEVELS; lv++) {
+  const vals = coverageByLevel[lv] || [];
+  if (vals.length < 2) continue;
+  const mean = vals.reduce((a,b)=>a+b,0) / vals.length;
+  const variance = vals.reduce((s,v)=>s+(v-mean)*(v-mean),0) / vals.length;
+  stddevs.push({ level: lv, mean: Math.round(mean), stddev: Math.round(Math.sqrt(variance)), min: Math.min(...vals), max: Math.max(...vals) });
+}
+const maxStddev = stddevs.length > 0 ? Math.max(...stddevs.map(d=>d.stddev)) : 999;
+const m1_pass = maxStddev <= 25;
+
+// M2: 低关底线 — Lv1-5 任意一次生成 ≥ 25%
+const earlyMins = [];
+for (let lv = 1; lv <= 5; lv++) {
+  const vals = coverageByLevel[lv] || [];
+  if (vals.length > 0) earlyMins.push(Math.min(...vals));
+}
+const m2_min = earlyMins.length > 0 ? Math.min(...earlyMins) : 0;
+const m2_pass = m2_min >= 25;
+
+// M3: 递进趋势 — Lv1-5 均值 < Lv10-15 均值
+const earlyAvg = stddevs.filter(d=>d.level>=1&&d.level<=5).reduce((s,d)=>s+d.mean,0) /
+  Math.max(1, stddevs.filter(d=>d.level>=1&&d.level<=5).length);
+const midAvg = stddevs.filter(d=>d.level>=10&&d.level<=15).reduce((s,d)=>s+d.mean,0) /
+  Math.max(1, stddevs.filter(d=>d.level>=10&&d.level<=15).length);
+const m3_pass = earlyAvg < midAvg;
+
+// 综合覆盖率检查 (M1+M2+M3+M4)
+const coverageOK = m1_pass && m2_pass && m3_pass && (totalSolvable === totalTests);
+addCheck('契约: 覆盖率稳定性 (M1+M2+M3)', coverageOK, {
+  M1_同级稳定性: { pass: m1_pass, max_stddev: maxStddev, target: '≤25', levels: stddevs },
+  M2_低关底线: { pass: m2_pass, min_coverage_lv1_5: m2_min, target: '≥25' },
+  M3_递进趋势: { pass: m3_pass, early_avg: Math.round(earlyAvg), mid_avg: Math.round(midAvg), target: 'early < mid' },
+  M4_可解性: { pass: totalSolvable === totalTests, rate: solvableRate + '%', target: '100%' },
+});
+
+// 保留原有覆盖率分布摘要
+if (allSamples.length > 0) {
+  const sorted = allSamples.map(d => d.coverage_pct).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   addCheck('螺丝遮盖率分布', true, {
-    samples: coverageData.length,
+    samples: allSamples.length,
     min_pct: sorted[0], p25_pct: sorted[Math.floor(sorted.length * 0.25)], p50_pct: sorted[mid],
     p75_pct: sorted[Math.floor(sorted.length * 0.75)], max_pct: sorted[sorted.length - 1],
-    first_10: coverageData.slice(0, 10),
+    first_10: allSamples.filter(s => s.round === 0).slice(0, 10),
   });
+} else {
+  addCheck('螺丝遮盖统计', false, { error: '无法生成统计数据' });
+}
+
+// 开局可操作螺丝数
+if (openCounts.length > 0) {
   const openSorted = openCounts.sort((a, b) => a - b);
   addCheck('开局可操作螺丝数', true, {
     min: openSorted[0], p50: openSorted[Math.floor(openSorted.length / 2)], max: openSorted[openSorted.length - 1],
   });
-} else {
-  addCheck('螺丝遮盖统计', false, { error: '无法生成统计数据' });
 }
 
 // ====== 写入结果 ======

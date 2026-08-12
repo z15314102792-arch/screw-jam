@@ -1,0 +1,49 @@
+{
+  "name": "螺丝消除-覆盖率稳定性验收",
+  "required_file": "verify-results.json",
+  "required_keys": ["project", "version", "checks", "summary"],
+  "min_size_bytes": 200,
+  "active": true,
+  "_contract": {
+    "goal": "修复关卡螺丝遮盖率不稳定问题——同级波动从50%降到≤25%，低关不再过于简单",
+    "metrics": [
+      {
+        "id": "M1-同级稳定性",
+        "description": "每个关卡10次生成的覆盖率标准差（波动幅度）",
+        "target": "所有关卡标准差 ≤ 25个百分点",
+        "current": "部分关卡标准差高达30+个百分点",
+        "measurement": "verify.js 中对每关10次采样计算 stddev，最大值不超过25"
+      },
+      {
+        "id": "M2-低关难度底线",
+        "description": "前5关最低覆盖率不能太低",
+        "target": "Lv1-5 任意一次生成的覆盖率 ≥ 25%",
+        "current": "Lv1 最低17%，Lv3 最低11%",
+        "measurement": "verify.js 10次采样中 min_coverage >= 25"
+      },
+      {
+        "id": "M3-递进趋势",
+        "description": "平均覆盖率随关卡数大致递增或持平",
+        "target": "Lv1-5 均值 < Lv10-15 均值（低关比高关容易）",
+        "current": "Lv3平均34%，Lv10平均61% — 趋势存在但不稳定",
+        "measurement": "verify.js 中计算 early_avg < mid_avg"
+      },
+      {
+        "id": "M4-可解性保持",
+        "description": "改动不能破坏可解性",
+        "target": "30关×3轮 = 90/90 全通过",
+        "current": "90/90",
+        "measurement": "verify.js 现有检查"
+      }
+    ],
+    "approach": {
+      "summary": "不改变整体架构，只优化 _tryGen 中的面板位置生成和螺丝放置逻辑",
+      "key_changes": [
+        "面板位置从纯随机改为锚点聚类：先随机放几个锚点，每个锚点周围聚集2-4块面板，确保簇内重叠",
+        "螺丝放置时，如果 findCoverTargets 找不到目标，不退化到网格散步，而是强制在面板重叠区域内放置",
+        "覆盖率目标检查：genLevel 生成的关卡如果不满足该关的最低覆盖率要求，丢弃重试",
+        "每关有最小目标覆盖率：Lv1-3 ≥25%, Lv4-10 ≥40%, Lv11+ ≥50%"
+      ]
+    }
+  }
+}
