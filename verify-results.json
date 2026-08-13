@@ -1,7 +1,7 @@
 {
   "project": "螺丝消除",
   "version": "v3.3",
-  "timestamp": "2026-08-11T12:16:15.309Z",
+  "timestamp": "2026-08-12T02:40:20.499Z",
   "checks": [
     {
       "name": "入口文件存在",
@@ -39,13 +39,13 @@
       "data": {
         "M1_同级稳定性": {
           "pass": true,
-          "max_stddev": 14,
+          "max_stddev": 11,
           "target": "≤25",
           "levels": [
             {
               "level": 1,
-              "mean": 47,
-              "stddev": 7,
+              "mean": 45,
+              "stddev": 8,
               "min": 33,
               "max": 50
             },
@@ -58,56 +58,56 @@
             },
             {
               "level": 3,
-              "mean": 41,
-              "stddev": 5,
-              "min": 33,
-              "max": 44
+              "mean": 46,
+              "stddev": 7,
+              "min": 44,
+              "max": 67
             },
             {
               "level": 4,
               "mean": 49,
-              "stddev": 6,
+              "stddev": 10,
               "min": 44,
-              "max": 56
+              "max": 78
             },
             {
               "level": 5,
-              "mean": 46,
-              "stddev": 5,
+              "mean": 47,
+              "stddev": 10,
               "min": 44,
-              "max": 56
+              "max": 78
             },
             {
               "level": 6,
-              "mean": 59,
-              "stddev": 14,
+              "mean": 57,
+              "stddev": 10,
               "min": 42,
               "max": 75
             },
             {
               "level": 7,
-              "mean": 64,
-              "stddev": 10,
+              "mean": 60,
+              "stddev": 11,
               "min": 50,
               "max": 75
             },
             {
               "level": 8,
-              "mean": 50,
-              "stddev": 0,
+              "mean": 54,
+              "stddev": 9,
               "min": 50,
-              "max": 50
+              "max": 75
             },
             {
               "level": 9,
-              "mean": 52,
-              "stddev": 5,
+              "mean": 53,
+              "stddev": 7,
               "min": 50,
               "max": 67
             },
             {
               "level": 10,
-              "mean": 53,
+              "mean": 52,
               "stddev": 5,
               "min": 50,
               "max": 67
@@ -128,129 +128,129 @@
             },
             {
               "level": 13,
-              "mean": 52,
-              "stddev": 7,
+              "mean": 47,
+              "stddev": 0,
               "min": 47,
-              "max": 67
+              "max": 47
             },
             {
               "level": 14,
-              "mean": 63,
-              "stddev": 6,
-              "min": 53,
-              "max": 73
-            },
-            {
-              "level": 15,
-              "mean": 62,
+              "mean": 61,
               "stddev": 10,
               "min": 53,
               "max": 87
             },
             {
-              "level": 16,
+              "level": 15,
               "mean": 65,
-              "stddev": 9,
+              "stddev": 5,
+              "min": 60,
+              "max": 73
+            },
+            {
+              "level": 16,
+              "mean": 64,
+              "stddev": 8,
               "min": 53,
-              "max": 87
+              "max": 73
             },
             {
               "level": 17,
-              "mean": 61,
-              "stddev": 6,
+              "mean": 59,
+              "stddev": 7,
               "min": 53,
               "max": 73
             },
             {
               "level": 18,
-              "mean": 59,
-              "stddev": 4,
-              "min": 56,
-              "max": 67
-            },
-            {
-              "level": 19,
-              "mean": 61,
-              "stddev": 8,
-              "min": 56,
-              "max": 78
-            },
-            {
-              "level": 20,
-              "mean": 60,
-              "stddev": 6,
-              "min": 56,
-              "max": 72
-            },
-            {
-              "level": 21,
-              "mean": 55,
-              "stddev": 5,
-              "min": 50,
-              "max": 67
-            },
-            {
-              "level": 22,
-              "mean": 60,
-              "stddev": 7,
-              "min": 50,
-              "max": 78
-            },
-            {
-              "level": 23,
-              "mean": 61,
-              "stddev": 7,
-              "min": 50,
-              "max": 72
-            },
-            {
-              "level": 24,
-              "mean": 56,
-              "stddev": 4,
-              "min": 50,
-              "max": 67
-            },
-            {
-              "level": 25,
               "mean": 57,
               "stddev": 6,
               "min": 50,
               "max": 67
             },
             {
-              "level": 26,
+              "level": 19,
+              "mean": 63,
+              "stddev": 8,
+              "min": 56,
+              "max": 83
+            },
+            {
+              "level": 20,
+              "mean": 57,
+              "stddev": 4,
+              "min": 50,
+              "max": 67
+            },
+            {
+              "level": 21,
+              "mean": 60,
+              "stddev": 9,
+              "min": 50,
+              "max": 83
+            },
+            {
+              "level": 22,
+              "mean": 60,
+              "stddev": 7,
+              "min": 50,
+              "max": 67
+            },
+            {
+              "level": 23,
               "mean": 61,
               "stddev": 9,
               "min": 50,
               "max": 78
             },
             {
-              "level": 27,
-              "mean": 60,
-              "stddev": 10,
-              "min": 50,
-              "max": 83
-            },
-            {
-              "level": 28,
-              "mean": 59,
+              "level": 24,
+              "mean": 56,
               "stddev": 6,
               "min": 50,
               "max": 67
             },
             {
-              "level": 29,
-              "mean": 59,
-              "stddev": 7,
-              "min": 50,
+              "level": 25,
+              "mean": 64,
+              "stddev": 6,
+              "min": 56,
               "max": 72
             },
             {
-              "level": 30,
-              "mean": 60,
-              "stddev": 7,
-              "min": 56,
+              "level": 26,
+              "mean": 58,
+              "stddev": 8,
+              "min": 50,
               "max": 78
+            },
+            {
+              "level": 27,
+              "mean": 60,
+              "stddev": 8,
+              "min": 50,
+              "max": 78
+            },
+            {
+              "level": 28,
+              "mean": 60,
+              "stddev": 8,
+              "min": 50,
+              "max": 78
+            },
+            {
+              "level": 29,
+              "mean": 63,
+              "stddev": 8,
+              "min": 50,
+              "max": 78
+            },
+            {
+              "level": 30,
+              "mean": 55,
+              "stddev": 5,
+              "min": 50,
+              "max": 67
             }
           ]
         },
@@ -261,8 +261,8 @@
         },
         "M3_递进趋势": {
           "pass": true,
-          "early_avg": 43,
-          "mid_avg": 54,
+          "early_avg": 44,
+          "mid_avg": 53,
           "target": "early < mid"
         },
         "M4_可解性": {
@@ -280,15 +280,15 @@
         "min_pct": 33,
         "p25_pct": 50,
         "p50_pct": 56,
-        "p75_pct": 60,
+        "p75_pct": 61,
         "max_pct": 87,
         "first_10": [
           {
             "level": 1,
             "round": 0,
             "total": 6,
-            "blocked": 2,
-            "coverage_pct": 33
+            "blocked": 3,
+            "coverage_pct": 50
           },
           {
             "level": 2,
@@ -308,15 +308,15 @@
             "level": 4,
             "round": 0,
             "total": 9,
-            "blocked": 5,
-            "coverage_pct": 56
+            "blocked": 4,
+            "coverage_pct": 44
           },
           {
             "level": 5,
             "round": 0,
             "total": 9,
-            "blocked": 5,
-            "coverage_pct": 56
+            "blocked": 4,
+            "coverage_pct": 44
           },
           {
             "level": 6,
@@ -329,8 +329,8 @@
             "level": 7,
             "round": 0,
             "total": 12,
-            "blocked": 8,
-            "coverage_pct": 67
+            "blocked": 6,
+            "coverage_pct": 50
           },
           {
             "level": 8,
@@ -360,8 +360,8 @@
       "name": "开局可操作螺丝数",
       "pass": true,
       "data": {
-        "min": 4,
-        "p50": 6,
+        "min": 3,
+        "p50": 7,
         "max": 9
       }
     }
